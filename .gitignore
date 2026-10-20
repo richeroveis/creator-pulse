@@ -1,0 +1,40 @@
+# Secrets and environment
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.gltest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Media (regenerated locally, never tracked on main)
+*.mp4
+*.webm
+*.wav
+
+# Evidence runtime state
+evidence/_checkpoint.json
+evidence/_deploy_state.json
+
+# Build artifacts
+artifacts/
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Local pages staging
+.pages-build/
