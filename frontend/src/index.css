@@ -74,10 +74,17 @@ body {
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(255, 61, 206, 0.65), rgba(139, 92, 246, 0.65));
-  outline: none;
+  background: linear-gradient(90deg, rgba(255, 61, 206, 0.75), rgba(139, 92, 246, 0.75));
 }
 
 input[type="range"]::-webkit-slider-thumb {
@@ -85,19 +92,27 @@ input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 18px;
   height: 18px;
+  margin-top: -6px;
   border-radius: 999px;
-  background: #fff;
+  background: #ffffff;
   border: 3px solid #ff3dce;
-  box-shadow: 0 0 14px rgba(255, 61, 206, 0.6);
+  box-shadow: 0 0 14px rgba(255, 61, 206, 0.65);
   cursor: pointer;
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 61, 206, 0.75), rgba(139, 92, 246, 0.75));
 }
 
 input[type="range"]::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: #fff;
+  background: #ffffff;
   border: 3px solid #ff3dce;
+  box-shadow: 0 0 14px rgba(255, 61, 206, 0.65);
   cursor: pointer;
 }
 

@@ -4,6 +4,7 @@ import {
   BAND_LABEL,
   BAND_TONE,
   computeBand,
+  cpt,
   fmtCpt,
   relativeClock,
   shortAddr,
@@ -61,9 +62,9 @@ export function ConsensusDrawer({
     return computeBand(
       campaign.quality_anchor,
       campaign.disclosure_verified,
-      campaign.base_reward_atto,
-      campaign.viral_bonus_pool_atto,
-      campaign.required_creator_bond_atto,
+      Math.round(cpt(campaign.base_reward_atto)),
+      Math.round(cpt(campaign.viral_bonus_pool_atto)),
+      Math.round(cpt(campaign.required_creator_bond_atto)),
     );
   }, [campaign]);
 
@@ -71,8 +72,8 @@ export function ConsensusDrawer({
 
   const conserved =
     preview !== null &&
-    preview.creator === campaign.creator_payout_atto &&
-    preview.brand === campaign.brand_refund_atto;
+    preview.creator === Math.round(cpt(campaign.creator_payout_atto)) &&
+    preview.brand === Math.round(cpt(campaign.brand_refund_atto));
 
   const copyPrompt = async () => {
     try {

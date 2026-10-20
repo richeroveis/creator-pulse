@@ -11,7 +11,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { PulseApi } from "../hooks/usePulse";
-import { fmtCpt } from "../lib/format";
+import { cpt, fmtCptValue } from "../lib/format";
 import { sound } from "../lib/sound";
 
 type Outcome = {
@@ -195,7 +195,7 @@ export function GuardLab({ api }: { api: PulseApi }) {
     setDisclosure({
       state: slashed ? "pass" : "fail",
       observed: slashed
-        ? `forced slash: creator 0 CPT, brand refund ${fmtCpt(Number(result.brand_refund))} CPT`
+        ? `forced slash: creator 0 CPT, brand refund ${fmtCptValue(cpt(Number(result.brand_refund)))} CPT`
         : `unexpected band ${result.campaign_band}`,
     });
     if (slashed) sound.success();
@@ -241,7 +241,7 @@ export function GuardLab({ api }: { api: PulseApi }) {
           {owned ? (
             <p className="mt-3 rounded-lg border border-white/[0.07] bg-black/20 px-3 py-2 text-[11px] text-white/40">
               target #{owned.campaign_id} state {owned.state.toLowerCase()}, locked{" "}
-              {fmtCpt(owned.vault_locked_atto)} CPT
+              {fmtCptValue(cpt(owned.vault_locked_atto))} CPT
             </p>
           ) : (
             <p className="mt-3 rounded-lg border border-white/[0.07] bg-black/20 px-3 py-2 text-[11px] text-white/40">

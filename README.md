@@ -220,8 +220,75 @@ curators live only in that ignored file.
 ## Live studionet evidence
 
 <!-- DEPLOYMENT_EVIDENCE_START -->
-The live deployment section is written by `scripts/deploy_studionet.py` after the transaction table
-finalizes. Until then the frontend shows a `pending` deployment identity instead of a fake address.
+### Deployment identity
+
+| Field | Value |
+| --- | --- |
+| Network | studionet, chain id 61999 |
+| Contract | [`0x110C9EFa897A5Eab9b7f8019e70A43EB994f181B`](https://explorer-studio.genlayer.com/address/0x110C9EFa897A5Eab9b7f8019e70A43EB994f181B) |
+| Deploy transaction | [`0xee06a0af540cd9ce9c7e75929b6ab6b5a453e0e25102a9fd982b28a617cdaf28`](https://explorer-studio.genlayer.com/tx/0xee06a0af540cd9ce9c7e75929b6ab6b5a453e0e25102a9fd982b28a617cdaf28) |
+| Contract file sha256 | `14bf5153b84d7167231d427c2899d97d9514e828efe463d1c274b4e8d4718c33` |
+| Deployed code sha256 | `14bf5153b84d7167231d427c2899d97d9514e828efe463d1c274b4e8d4718c33` |
+| Runner | `# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }` |
+
+Four independent places carry the same code hash: `contracts/creator_pulse.py` on disk,
+`evidence/studionet_deployment.json`, `frontend/src/config.ts` and this README. Run
+`python scripts/verify_identity.py` to re-check all four, plus the address that appears in the
+evidence file and the frontend.
+
+### Transaction table
+
+Every row below was polled to `FINALIZED` and read back through the explorer RPC. Guard probes are
+expected to finish with `FINISHED_WITH_ERROR`; the payload column in the evidence file records the
+exact revert string.
+
+| Step | Transaction | Status | Result | Execution | Votes |
+| --- | --- | --- | --- | --- | --- |
+| `faucet:brand_nova` | [0xfac62bcf9b](https://explorer-studio.genlayer.com/tx/0xfac62bcf9bbe6226a52bdbf5f3104e065639049f363ba21bd804fd2bb90de68c) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:brand_pulse` | [0xcf950464b8](https://explorer-studio.genlayer.com/tx/0xcf950464b873265b9c47ae22cf60a873252be0e2fe017534d121928c8d95bb58) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:brand_aurora` | [0x6f313017af](https://explorer-studio.genlayer.com/tx/0x6f313017af680c6490f65bdb93a2100c03a80b97b8f0cbb6fbf2a245f4c22a4e) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:creator_mira` | [0x0ebb2ad0be](https://explorer-studio.genlayer.com/tx/0x0ebb2ad0bee92827d8519561b38544dad042b9e2c74bf3f20a479047ec27b96d) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:creator_jonas` | [0x7e2752b805](https://explorer-studio.genlayer.com/tx/0x7e2752b805c0be524f3191c7a754e8d9aaa4bc5c213ab5da3b3538036a48e028) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
+| `faucet:curator_lin` | [0x43bdb12655](https://explorer-studio.genlayer.com/tx/0x43bdb126551b8b4db1505e93db48e54f90aa31b26e5b05c9e3db09b0067850d3) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:curator_ada` | [0xfc528a95f6](https://explorer-studio.genlayer.com/tx/0xfc528a95f6e557129cbfb3df276d26eea093a5daacb6c018cf6740bbd913f313) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
+| `create:1` | [0x9b7d5ac8d1](https://explorer-studio.genlayer.com/tx/0x9b7d5ac8d136a63d402c7d5c2d49ec7e309cee56c83d93da16eb610824f94871) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
+| `create:2` | [0xe65b60927a](https://explorer-studio.genlayer.com/tx/0xe65b60927a2c0cca16072553ae7e955d492f350c2368026607e0f445e17187df) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `create:3` | [0x48a50c2c02](https://explorer-studio.genlayer.com/tx/0x48a50c2c0293c99ffeca842736245bd169fbd565eb669bd17f071af5716c692c) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `submit:1` | [0xb83bd383be](https://explorer-studio.genlayer.com/tx/0xb83bd383be6f393df512f7660d5fee76effcef52f2f3583562ab12bb719f012e) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `submit:2` | [0xfc3276992e](https://explorer-studio.genlayer.com/tx/0xfc3276992eba071ebeaca645efa47d6b27263894fc6449ad34c48d2b530b4991) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `submit:3` | [0x75397b4aa1](https://explorer-studio.genlayer.com/tx/0x75397b4aa1ae5105830bddd7be31e0285516f353a06fe59e2282d59672bedc03) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `curate:1` | [0x6ba52402ab](https://explorer-studio.genlayer.com/tx/0x6ba52402abddd16df6d936b413d7bb39d1729e186f6994c03a2b0f9b0819f1ed) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `curate:2` | [0x1621cdf1c9](https://explorer-studio.genlayer.com/tx/0x1621cdf1c922851cc07a7b8887f889d18cfc76dff32b6b6641dea5a48b050a08) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
+| `curate:3` | [0xabaf2ed2e7](https://explorer-studio.genlayer.com/tx/0xabaf2ed2e7a36f159b635aa6ea3c17a202904cf24d1fb66bb3815352b3b6abef) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `curate:4` | [0x58744ec625](https://explorer-studio.genlayer.com/tx/0x58744ec62569fe4d3e6382a88e192f6ae2b9d798806cc17e5c10c506e02d924a) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
+| `guard:clawback-submitted` | [0x1a646d87ec](https://explorer-studio.genlayer.com/tx/0x1a646d87ec75533a308db957119618825ec533a0bf4cc43a8e7550cf2c6663b5) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `audit:1` | [0x6b903db2dc](https://explorer-studio.genlayer.com/tx/0x6b903db2dcb7c061e5d0d39c091a5786bef41f8e74414212966440394a9ab574) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `audit:2` | [0x2beeebf4d3](https://explorer-studio.genlayer.com/tx/0x2beeebf4d3c1a1da23b22f2a49466b5ad33e52eadbaba50dd19a38677e4725a1) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `audit:3` | [0x2d353812e8](https://explorer-studio.genlayer.com/tx/0x2d353812e8db7bfc2b634d5ba4de774cf7d8a9f0ec3d968d9a3dfb0cdc19b862) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `guard:clawback-evaluated` | [0x3c7c374d54](https://explorer-studio.genlayer.com/tx/0x3c7c374d545cd71ed4bcd46589a4e2dd595c21c218433104fa51daa11fae39a1) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `settle:1` | [0xb676aa3aee](https://explorer-studio.genlayer.com/tx/0xb676aa3aeeba808092fa4ece1c848c45d02d2264d8d1a81f2d8f7a61d0e94091) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `settle:3` | [0x2c2e9603ec](https://explorer-studio.genlayer.com/tx/0x2c2e9603ec93b7628cf3af52b3fba003bc83c33a5dd8acdf5919081310ab54d7) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
+| `refund:curation-1` | [0x5068fa7e8e](https://explorer-studio.genlayer.com/tx/0x5068fa7e8e49d9f74ba8580896cafb13c822afd0d773e65aabc0c729398380cc) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
+| `guard:curate-after-settlement` | [0x5c90e42056](https://explorer-studio.genlayer.com/tx/0x5c90e420564d854fedd98d49841d34342d0a6e966fe339528a1a900aa67b8e0b) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `guard:transfer-overdraw` | [0x49665d0eec](https://explorer-studio.genlayer.com/tx/0x49665d0eecac9ec5041ee10be2daa07f992cd81dda768c9a056f0a3686d73149) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+
+### Final campaign state
+
+| Id | Campaign | Band | Anchor | Creator CPT | Brand CPT | State |
+| --- | --- | --- | --- | --- | --- | --- |
+| 3 | AuroraLab night serum drop | `BOT_FRAUD_OR_MISSING_DISCLOSURE_SLASH` | 0 | 0 | 1650 | SETTLED |
+| 2 | PulseFuel morning stack | `TARGET_MET_TIER` | 80 | 1000 | 400 | EVALUATED |
+| 1 | NovaGlow winter ritual launch | `VIRAL_BONUS_TIER` | 100 | 2120 | 0 | SETTLED |
+
+Vault invariant at the end of the run:
+`vault 1610 CPT == escrow
+1400 + curation
+210`, drift
+`0`.
+
+The raw machine readable record, including every vote tally, payload and final balance, lives in
+[`evidence/studionet_deployment.json`](evidence/studionet_deployment.json).
+
 <!-- DEPLOYMENT_EVIDENCE_END -->
 
 ---
@@ -245,6 +312,14 @@ finalizes. Until then the frontend shows a `pending` deployment identity instead
 ---
 
 ## Frontend
+
+![CreatorPulse hero](docs/screenshot-home.png)
+
+![Live campaign board read from studionet](docs/screenshot-campaigns.png)
+
+![What if payout simulator verified against the deployed helper](docs/screenshot-simulator.png)
+
+![Consensus and prompt inspector](docs/screenshot-inspector.png)
 
 - Creator economy studio aesthetic on midnight `#0B0716` with magenta, violet and emerald rings.
 - Interactive What-If payout and viral bonus simulator with live band, split bars and conservation.

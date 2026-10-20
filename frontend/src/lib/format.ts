@@ -158,8 +158,12 @@ export function cpt(atto: number | string | undefined | null): number {
 }
 
 export function fmtCpt(atto: number | string | undefined | null, digits = 0): string {
-  const value = cpt(atto);
-  return value.toLocaleString("en-US", {
+  return fmtCptValue(cpt(atto), digits);
+}
+
+export function fmtCptValue(value: number, digits = 0): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  return safe.toLocaleString("en-US", {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });

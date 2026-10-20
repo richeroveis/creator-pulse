@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { BadgeCheck, CircleDollarSign, Link2, RotateCcw, ShieldAlert, Sparkles, TrendingUp } from "lucide-react";
 import type { PulseApi } from "../hooks/usePulse";
-import { BAND_LABEL, BAND_TONE, computeBand, fmtCpt } from "../lib/format";
+import { BAND_LABEL, BAND_TONE, computeBand, cpt, fmtCptValue } from "../lib/format";
 import { sound } from "../lib/sound";
 
 const ANCHORS = [
@@ -78,12 +78,16 @@ export function Simulator({ api }: { api: PulseApi }) {
     const result = await api.previewBand(base, viral, bond, outcome.anchor, disclosure);
     setChecking(false);
     if (result) {
+      const chainCreator = Math.round(cpt(Number(result.creator_payout)));
+      const chainBrand = Math.round(cpt(Number(result.brand_refund)));
       const matches =
-        result.campaign_band === outcome.band && result.creator_payout === outcome.creator;
+        result.campaign_band === outcome.band &&
+        chainCreator === Math.round(outcome.creator) &&
+        chainBrand === Math.round(outcome.brand);
       setOnChain(
         matches
-          ? `on-chain helper agrees: ${result.campaign_band} pays ${fmtCpt(result.creator_payout)} CPT to the creator`
-          : `drift detected: chain says ${result.campaign_band} with ${fmtCpt(result.creator_payout)} CPT`,
+          ? `on-chain helper agrees: ${result.campaign_band} pays ${fmtCptValue(chainCreator)} CPT to the creator and ${fmtCptValue(chainBrand)} CPT to the brand`
+          : `drift detected: chain says ${result.campaign_band} with ${fmtCptValue(chainCreator)} CPT to the creator`,
       );
       if (matches) sound.success();
       else sound.error();
@@ -215,9 +219,9 @@ export function Simulator({ api }: { api: PulseApi }) {
               />
             </div>
             <div className="mt-2.5 flex items-center justify-between font-mono text-xs">
-              <span className="text-pulse-emerald">{fmtCpt(outcome.creator)} CPT</span>
-              <span className="text-white/35">{fmtCpt(total)} CPT locked</span>
-              <span className="text-pulse-violet">{fmtCpt(outcome.brand)} CPT</span>
+              <span className="text-pulse-emerald">{fmtCptValue(outcome.creator)} CPT</span>
+              <span className="text-white/35">{fmtCptValue(total)} CPT locked</span>
+              <span className="text-pulse-violet">{fmtCptValue(outcome.brand)} CPT</span>
             </div>
           </div>
         </div>
@@ -241,16 +245,16 @@ export function Simulator({ api }: { api: PulseApi }) {
             <div className="panel-tight p-4">
               <p className="label">Creator receives</p>
               <p className="mt-1.5 font-display text-2xl font-semibold text-pulse-emerald">
-                {fmtCpt(outcome.creator)}
+                {fmtCptValue(outcome.creator)}
               </p>
               <p className="mt-1 text-[11px] text-white/35">
-                {bond > 0 ? `includes the ${fmtCpt(bond)} CPT bond` : "no bond"}
+                {bond > 0 ? `includes the ${fmtCptValue(bond)} CPT bond` : "no bond"}
               </p>
             </div>
             <div className="panel-tight p-4">
               <p className="label">Brand refund</p>
               <p className="mt-1.5 font-display text-2xl font-semibold text-pulse-violet">
-                {fmtCpt(outcome.brand)}
+                {fmtCptValue(outcome.brand)}
               </p>
               <p className="mt-1 text-[11px] text-white/35">
                 {outcome.bonusReleased ? "viral pool paid out" : "viral pool returned"}
@@ -261,8 +265,8 @@ export function Simulator({ api }: { api: PulseApi }) {
           <div className="mt-4 space-y-2.5 text-[12.5px] leading-relaxed text-white/55">
             <p className="flex items-start gap-2">
               <CircleDollarSign size={15} className="mt-0.5 shrink-0 text-pulse-ice" />
-              Conservation: {fmtCpt(outcome.creator)} + {fmtCpt(outcome.brand)} ={" "}
-              {fmtCpt(outcome.creator + outcome.brand)} CPT, equal to base reward plus viral pool plus bond.
+              Conservation: {fmtCptValue(outcome.creator)} + {fmtCptValue(outcome.brand)} ={" "}
+              {fmtCptValue(outcome.creator + outcome.brand)} CPT, equal to base reward plus viral pool plus bond.
             </p>
             <p className="flex items-start gap-2">
               <ShieldAlert size={15} className="mt-0.5 shrink-0 text-pulse-amber" />
