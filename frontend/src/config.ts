@@ -5,10 +5,10 @@
  */
 export const CONTRACT_ADDRESS =
   (import.meta.env.VITE_CONTRACT_ADDRESS as string | undefined) ??
-  "0x110C9EFa897A5Eab9b7f8019e70A43EB994f181B";
+  "0x031B8ed9391b81fd89107B231F9573bD699e3F38";
 
 export const CONTRACT_SHA256 =
-  (import.meta.env.VITE_CONTRACT_SHA256 as string | undefined) ?? "14bf5153b84d7167231d427c2899d97d9514e828efe463d1c274b4e8d4718c33";
+  (import.meta.env.VITE_CONTRACT_SHA256 as string | undefined) ?? "66fab11723efa7bc3603a8537c2f98003649fe9339b2397829146539df1c4d65";
 
 export const EXPLORER_URL = "https://explorer-studio.genlayer.com";
 export const REPO_URL = "https://github.com/richeroveis/creator-pulse";

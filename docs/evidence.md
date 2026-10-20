@@ -12,52 +12,52 @@ file is a human readable companion to the machine readable record in
   expected to finish with `FINISHED_WITH_ERROR`, and the exact revert payload is stored in the JSON.
 - Final state was read with `get_dashboard`, `check_vault_invariants` and `get_token_balance`, not inferred
   from the transaction log.
-- The deployed code identity is the sha256 of `contracts/creator_pulse.py`: `14bf5153b84d7167231d427c2899d97d9514e828efe463d1c274b4e8d4718c33`. The same
-  digest is published in the evidence JSON, `frontend/src/config.ts` and `README.md`, and re-checked by
-  `scripts/verify_identity.py`.
+- The deployed code identity is the sha256 of `contracts/creator_pulse.py`: `66fab11723efa7bc3603a8537c2f98003649fe9339b2397829146539df1c4d65`.
+  The same digest is published in the evidence JSON, `frontend/src/config.ts` and `README.md`, and
+  re-checked by `scripts/verify_identity.py`.
 
 ## Deployment
 
 | Field | Value |
 | --- | --- |
 | Network | studionet, chain id 61999 |
-| Contract | [`0x110C9EFa897A5Eab9b7f8019e70A43EB994f181B`](https://explorer-studio.genlayer.com/address/0x110C9EFa897A5Eab9b7f8019e70A43EB994f181B) |
-| Deploy transaction | [0xee06a0af540c](https://explorer-studio.genlayer.com/tx/0xee06a0af540cd9ce9c7e75929b6ab6b5a453e0e25102a9fd982b28a617cdaf28) |
+| Contract | [`0x031B8ed9391b81fd89107B231F9573bD699e3F38`](https://explorer-studio.genlayer.com/address/0x031B8ed9391b81fd89107B231F9573bD699e3F38) |
+| Deploy transaction | [0xa0d3b9ddfb9a](https://explorer-studio.genlayer.com/tx/0xa0d3b9ddfb9ae63a9c102f1b32890f67b48925c1e97c21ba4ad941c20280abd4) |
 | Runner | `# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }` |
-| Code sha256 | `14bf5153b84d7167231d427c2899d97d9514e828efe463d1c274b4e8d4718c33` |
-| Deployed at commit | `fa972f7d12c0e7bffcf4d981888977e6d2f4e26a` |
+| Code sha256 | `66fab11723efa7bc3603a8537c2f98003649fe9339b2397829146539df1c4d65` |
+| Deployed at commit | `19f5b74e65cc9ee8b30ac17a62b169a6a1fb70e6` |
 
 ## Transactions
 
 | Step | Transaction | Status | Result | Execution | Votes | Note |
 | --- | --- | --- | --- | --- | --- | --- |
-| `faucet:brand_nova` | [0xfac62bcf9bbe](https://explorer-studio.genlayer.com/tx/0xfac62bcf9bbe6226a52bdbf5f3104e065639049f363ba21bd804fd2bb90de68c) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | capped faucet credit for a demo signer |
-| `faucet:brand_pulse` | [0xcf950464b873](https://explorer-studio.genlayer.com/tx/0xcf950464b873265b9c47ae22cf60a873252be0e2fe017534d121928c8d95bb58) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | capped faucet credit for a demo signer |
-| `faucet:brand_aurora` | [0x6f313017af68](https://explorer-studio.genlayer.com/tx/0x6f313017af680c6490f65bdb93a2100c03a80b97b8f0cbb6fbf2a245f4c22a4e) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | capped faucet credit for a demo signer |
-| `faucet:creator_mira` | [0x0ebb2ad0bee9](https://explorer-studio.genlayer.com/tx/0x0ebb2ad0bee92827d8519561b38544dad042b9e2c74bf3f20a479047ec27b96d) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | capped faucet credit for a demo signer |
-| `faucet:creator_jonas` | [0x7e2752b805c0](https://explorer-studio.genlayer.com/tx/0x7e2752b805c0be524f3191c7a754e8d9aaa4bc5c213ab5da3b3538036a48e028) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | capped faucet credit for a demo signer |
-| `faucet:curator_lin` | [0x43bdb126551b](https://explorer-studio.genlayer.com/tx/0x43bdb126551b8b4db1505e93db48e54f90aa31b26e5b05c9e3db09b0067850d3) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | capped faucet credit for a demo signer |
-| `faucet:curator_ada` | [0xfc528a95f6e5](https://explorer-studio.genlayer.com/tx/0xfc528a95f6e557129cbfb3df276d26eea093a5daacb6c018cf6740bbd913f313) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | capped faucet credit for a demo signer |
-| `create:1` | [0x9b7d5ac8d136](https://explorer-studio.genlayer.com/tx/0x9b7d5ac8d136a63d402c7d5c2d49ec7e309cee56c83d93da16eb610824f94871) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | locks 2000 CPT of maximum liability |
-| `create:2` | [0xe65b60927a2c](https://explorer-studio.genlayer.com/tx/0xe65b60927a2c0cca16072553ae7e955d492f350c2368026607e0f445e17187df) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | locks 1300 CPT of maximum liability |
-| `create:3` | [0x48a50c2c0293](https://explorer-studio.genlayer.com/tx/0x48a50c2c0293c99ffeca842736245bd169fbd565eb669bd17f071af5716c692c) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | locks 1500 CPT of maximum liability |
-| `submit:1` | [0xb83bd383be6f](https://explorer-studio.genlayer.com/tx/0xb83bd383be6f393df512f7660d5fee76effcef52f2f3583562ab12bb719f012e) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | creator bond locked into custody |
-| `submit:2` | [0xfc3276992eba](https://explorer-studio.genlayer.com/tx/0xfc3276992eba071ebeaca645efa47d6b27263894fc6449ad34c48d2b530b4991) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | creator bond locked into custody |
-| `submit:3` | [0x75397b4aa1ae](https://explorer-studio.genlayer.com/tx/0x75397b4aa1ae5105830bddd7be31e0285516f353a06fe59e2282d59672bedc03) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | creator bond locked into custody |
-| `curate:1` | [0x6ba52402abdd](https://explorer-studio.genlayer.com/tx/0x6ba52402abddd16df6d936b413d7bb39d1729e186f6994c03a2b0f9b0819f1ed) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | 120 CPT staked behind campaign 1 |
-| `curate:2` | [0x1621cdf1c922](https://explorer-studio.genlayer.com/tx/0x1621cdf1c922851cc07a7b8887f889d18cfc76dff32b6b6641dea5a48b050a08) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | 40 CPT staked behind campaign 1 |
-| `curate:3` | [0xabaf2ed2e7a3](https://explorer-studio.genlayer.com/tx/0xabaf2ed2e7a36f159b635aa6ea3c17a202904cf24d1fb66bb3815352b3b6abef) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | 60 CPT staked behind campaign 2 |
-| `curate:4` | [0x58744ec62569](https://explorer-studio.genlayer.com/tx/0x58744ec62569fe4d3e6382a88e192f6ae2b9d798806cc17e5c10c506e02d924a) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | 30 CPT staked behind campaign 3 |
-| `guard:clawback-submitted` | [0x1a646d87ec75](https://explorer-studio.genlayer.com/tx/0x1a646d87ec75533a308db957119618825ec533a0bf4cc43a8e7550cf2c6663b5) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree | brand cannot pull the viral pool while a deliverable awaits audit |
-| `audit:1` | [0x6b903db2dcb7](https://explorer-studio.genlayer.com/tx/0x6b903db2dcb7c061e5d0d39c091a5786bef41f8e74414212966440394a9ab574) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | live consensus audit, expected VIRAL_BONUS_TIER |
-| `audit:2` | [0x2beeebf4d3c1](https://explorer-studio.genlayer.com/tx/0x2beeebf4d3c1a1da23b22f2a49466b5ad33e52eadbaba50dd19a38677e4725a1) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | live consensus audit, expected TARGET_MET_TIER |
-| `audit:3` | [0x2d353812e8db](https://explorer-studio.genlayer.com/tx/0x2d353812e8db7bfc2b634d5ba4de774cf7d8a9f0ec3d968d9a3dfb0cdc19b862) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | live consensus audit, expected BOT_FRAUD_OR_MISSING_DISCLOSURE_SLASH |
-| `guard:clawback-evaluated` | [0x3c7c374d545c](https://explorer-studio.genlayer.com/tx/0x3c7c374d545cd71ed4bcd46589a4e2dd595c21c218433104fa51daa11fae39a1) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree | brand cannot pull funds inside the post audit dispute window |
-| `settle:1` | [0xb676aa3aeeba](https://explorer-studio.genlayer.com/tx/0xb676aa3aeeba808092fa4ece1c848c45d02d2264d8d1a81f2d8f7a61d0e94091) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | viral band releases the full vault |
-| `settle:3` | [0x2c2e9603ec93](https://explorer-studio.genlayer.com/tx/0x2c2e9603ec93b7628cf3af52b3fba003bc83c33a5dd8acdf5919081310ab54d7) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | slash band refunds the brand |
-| `refund:curation-1` | [0x5068fa7e8e49](https://explorer-studio.genlayer.com/tx/0x5068fa7e8e49d9f74ba8580896cafb13c822afd0d773e65aabc0c729398380cc) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | curator pulls the stake back after settlement |
-| `guard:curate-after-settlement` | [0x5c90e420564d](https://explorer-studio.genlayer.com/tx/0x5c90e420564d854fedd98d49841d34342d0a6e966fe339528a1a900aa67b8e0b) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree | settled campaigns leave the curated feed |
-| `guard:transfer-overdraw` | [0x49665d0eecac](https://explorer-studio.genlayer.com/tx/0x49665d0eecac9ec5041ee10be2daa07f992cd81dda768c9a056f0a3686d73149) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree | balance floor holds under an overdraw attempt |
+| `faucet:brand_nova` | [0xcfa3dbded8b1](https://explorer-studio.genlayer.com/tx/0xcfa3dbded8b194b7421e1f1172a0c7abd563fd7f90ba1b5a0d1730a273bc5b1c) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | capped faucet credit for a demo signer |
+| `faucet:brand_pulse` | [0x51f60c5389b5](https://explorer-studio.genlayer.com/tx/0x51f60c5389b5451ed5bdbacfb5da529da87b6811c48e0d0286a8490492c805a2) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | capped faucet credit for a demo signer |
+| `faucet:brand_aurora` | [0xb9d2b69d694c](https://explorer-studio.genlayer.com/tx/0xb9d2b69d694cd71d44a1bc014fa87e8c2aeabc695a03c35165342d02dbd389cc) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | capped faucet credit for a demo signer |
+| `faucet:creator_mira` | [0x6ef665b5be71](https://explorer-studio.genlayer.com/tx/0x6ef665b5be71a4d5672506d6251364e08c52ae384fd3486abf012b329d7c489c) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | capped faucet credit for a demo signer |
+| `faucet:creator_jonas` | [0x47b435095386](https://explorer-studio.genlayer.com/tx/0x47b435095386dc53c3f43567398e796bdf5d6fdb59107859b35f291c9afa7a07) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | capped faucet credit for a demo signer |
+| `faucet:curator_lin` | [0xf656aec2f27d](https://explorer-studio.genlayer.com/tx/0xf656aec2f27d39fb9ecda7c5fa6728b251f3e158676ae8afd0416941c0b73628) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | capped faucet credit for a demo signer |
+| `faucet:curator_ada` | [0xc1dd64380674](https://explorer-studio.genlayer.com/tx/0xc1dd643806746882cd338616708f81332dd374b280fad5f2b8eec5d2b116a052) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | capped faucet credit for a demo signer |
+| `create:1` | [0x5b1f82cee874](https://explorer-studio.genlayer.com/tx/0x5b1f82cee8746668deb44e98defdc19f5c18b2616612eb67e613696c1654349b) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | locks 2000 CPT of maximum liability |
+| `create:2` | [0x67452884a77e](https://explorer-studio.genlayer.com/tx/0x67452884a77efb2c997d7b82b3ba4f5c9546f8b09831f4fb0901bbde8c1e7fbf) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | locks 1300 CPT of maximum liability |
+| `create:3` | [0xdd7ed0be9c09](https://explorer-studio.genlayer.com/tx/0xdd7ed0be9c097a4b3bd94f568d6b6181d6f88f116a91d259bf1d6fe9d5d425ab) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | locks 1500 CPT of maximum liability |
+| `submit:1` | [0x3f13ba9dfa79](https://explorer-studio.genlayer.com/tx/0x3f13ba9dfa79da65a28b95ff72ff3c8043ae75cad46b60b73cda9fd346533acd) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | creator bond locked into custody |
+| `submit:2` | [0x593daa3e1f84](https://explorer-studio.genlayer.com/tx/0x593daa3e1f84ff47ba62770a5cffbf9abb12b15f3c5f574722bfacb04972c534) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | creator bond locked into custody |
+| `submit:3` | [0x703638484918](https://explorer-studio.genlayer.com/tx/0x7036384849186144ee1684b1423e9df6ac9f4f58d155d0e9ab2cf71509a337a8) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | creator bond locked into custody |
+| `curate:1` | [0x36f7ea8903c5](https://explorer-studio.genlayer.com/tx/0x36f7ea8903c5ef3f51eeec402822e7d91bac0ff645f0792b28ec9c22ce3cccc0) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | 120 CPT staked behind campaign 1 |
+| `curate:2` | [0x5e8c594497e2](https://explorer-studio.genlayer.com/tx/0x5e8c594497e2010ff3cf3849832c4cb665f77fea9a8db6a4ec006faac1060d53) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | 40 CPT staked behind campaign 1 |
+| `curate:3` | [0xd82fe1d620ba](https://explorer-studio.genlayer.com/tx/0xd82fe1d620bafa4246ad2342b71e8222a83905a829ec8255f9a36e9af1c55402) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | 60 CPT staked behind campaign 2 |
+| `curate:4` | [0x89f40b9334cd](https://explorer-studio.genlayer.com/tx/0x89f40b9334cdb312090a279c3646fbf7e8b37acac37c9b938ab1876590b839c1) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | 30 CPT staked behind campaign 3 |
+| `guard:clawback-submitted` | [0x150977f14dab](https://explorer-studio.genlayer.com/tx/0x150977f14dabc3b8ff0b95cc0bdb1fdb107c49e692922b7382f6f854123353d3) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree | brand cannot pull the viral pool while a deliverable awaits audit |
+| `audit:1` | [0x9b1bccaa4aac](https://explorer-studio.genlayer.com/tx/0x9b1bccaa4aacface3eb63752c21578cd1f17d016b2d4b792c1f71567890c7e9c) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | live consensus audit, expected VIRAL_BONUS_TIER |
+| `audit:2` | [0x065ade2b16dc](https://explorer-studio.genlayer.com/tx/0x065ade2b16dc4c76fcb318ec7990b9cc4ea6aa4ad5f5db3b5a74a0725adee60a) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 1 disagree | live consensus audit, expected TARGET_MET_TIER |
+| `audit:3` | [0x1806400aa312](https://explorer-studio.genlayer.com/tx/0x1806400aa312fad513f80c6055cf65029e06566e0e0b50bb8022ee0ef8ec6714) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | live consensus audit, expected BOT_FRAUD_OR_MISSING_DISCLOSURE_SLASH |
+| `guard:clawback-evaluated` | [0x0e94e360017e](https://explorer-studio.genlayer.com/tx/0x0e94e360017efb384f58cd32732d99249a796c75c21baaa2e07b09cf11635078) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree | brand cannot pull funds inside the post audit dispute window |
+| `settle:1` | [0x858d32683e99](https://explorer-studio.genlayer.com/tx/0x858d32683e99d8516e5ca569f7a4a7d007e97c134f28ca66d7a373a5a5ccf647) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | viral band releases the full vault |
+| `settle:3` | [0xd3bbc7dafd1f](https://explorer-studio.genlayer.com/tx/0xd3bbc7dafd1f80bff518d185e0343d2f297794290367873a186537727668607f) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree | slash band refunds the brand |
+| `refund:curation-1` | [0xad9be373efca](https://explorer-studio.genlayer.com/tx/0xad9be373efca9c11338ffed9b3540dbcbc03f52e5735c9116170f8200669666f) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree | curator pulls the stake back after settlement |
+| `guard:curate-after-settlement` | [0x64d911c68543](https://explorer-studio.genlayer.com/tx/0x64d911c685435cadbcd2bf8f280d074703be76d950f356fd0fcd385f25c7bc11) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree | settled campaigns leave the curated feed |
+| `guard:transfer-overdraw` | [0x3874ece506f9](https://explorer-studio.genlayer.com/tx/0x3874ece506f915bec863448686d9bd1116933e71c6583959288a7b252904bbd6) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree | balance floor holds under an overdraw attempt |
 
 ## Final campaign state
 
@@ -67,8 +67,9 @@ file is a human readable companion to the machine readable record in
 | 2 | PulseFuel morning stack | `TARGET_MET_TIER` | 80 | 1000 | 400 | EVALUATED |
 | 1 | NovaGlow winter ritual launch | `VIRAL_BONUS_TIER` | 100 | 2120 | 0 | SETTLED |
 
-Vault invariant: `1610 CPT == 1400 escrow
-+ 210 curation`, drift `0`, `ok = True`.
+Vault invariant: `1610 CPT ==
+1400 escrow + 210 curation`, drift
+`0`, `ok = True`.
 
 Campaign 2 was intentionally left in `EVALUATED` state so the settlement claim stays available in the
 live app for anyone who wants to exercise `claim_campaign_settlement` after the dispute window.

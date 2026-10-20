@@ -34,7 +34,9 @@ ANCHOR_SLASH = 0
 FAUCET_CAP_ATTO: int = 400000 * ATTO
 MAX_REWARD_ATTO: int = 2000000 * ATTO
 MIN_CREATOR_BOND_ATTO: int = 25 * ATTO
+MAX_CREATOR_BOND_ATTO: int = 250000 * ATTO
 MIN_CURATION_STAKE_ATTO: int = 5 * ATTO
+MAX_CURATION_STAKE_ATTO: int = 100000 * ATTO
 MIN_CAMPAIGN_WINDOW_SECONDS: int = 300
 MAX_CAMPAIGN_WINDOW_SECONDS: int = 60 * 60 * 24 * 90
 DISPUTE_WINDOW_SECONDS: int = 90
@@ -574,6 +576,8 @@ class CreatorPulse(gl.Contract):
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Reward exceeds the campaign ceiling")
         if bond < MIN_CREATOR_BOND_ATTO:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Creator bond is below the anti bot floor")
+        if bond > MAX_CREATOR_BOND_ATTO:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Creator bond exceeds the campaign ceiling")
 
         now = _now_clock()
         deadline = int(submission_deadline_clock)
@@ -675,6 +679,8 @@ class CreatorPulse(gl.Contract):
         stake = int(curation_stake)
         if stake < MIN_CURATION_STAKE_ATTO:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Curation stake is below the minimum")
+        if stake > MAX_CURATION_STAKE_ATTO:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Curation stake exceeds the ceiling")
         curator = gl.message.sender_address
         if curator == campaign.brand:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} The brand cannot curate its own campaign")
@@ -889,7 +895,9 @@ class CreatorPulse(gl.Contract):
             "faucet_cap_atto": FAUCET_CAP_ATTO,
             "max_reward_atto": MAX_REWARD_ATTO,
             "min_creator_bond_atto": MIN_CREATOR_BOND_ATTO,
+            "max_creator_bond_atto": MAX_CREATOR_BOND_ATTO,
             "min_curation_stake_atto": MIN_CURATION_STAKE_ATTO,
+            "max_curation_stake_atto": MAX_CURATION_STAKE_ATTO,
             "min_campaign_window_seconds": MIN_CAMPAIGN_WINDOW_SECONDS,
             "max_campaign_window_seconds": MAX_CAMPAIGN_WINDOW_SECONDS,
             "dispute_window_seconds": DISPUTE_WINDOW_SECONDS,
@@ -1082,7 +1090,9 @@ class CreatorPulse(gl.Contract):
                 "atto_per_cpt": ATTO,
                 "faucet_cap_atto": FAUCET_CAP_ATTO,
                 "min_creator_bond_atto": MIN_CREATOR_BOND_ATTO,
+                "max_creator_bond_atto": MAX_CREATOR_BOND_ATTO,
                 "min_curation_stake_atto": MIN_CURATION_STAKE_ATTO,
+                "max_curation_stake_atto": MAX_CURATION_STAKE_ATTO,
                 "dispute_window_seconds": DISPUTE_WINDOW_SECONDS,
                 "bands": [BAND_VIRAL, BAND_TARGET, BAND_PARTIAL, BAND_SLASH],
                 "anchors": [ANCHOR_VIRAL, ANCHOR_TARGET, ANCHOR_PARTIAL, ANCHOR_SLASH],

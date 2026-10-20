@@ -318,7 +318,7 @@ def scene_eight(draw: ImageDraw.ImageDraw, frame: Image.Image, evidence: dict) -
     digest = contract.get("file_sha256", "")
     draw.text((56, 312), digest[:40], font=font(14, mono=True), fill=WHITE)
     draw.text((56, 334), digest[40:], font=font(14, mono=True), fill=WHITE)
-    draw.text((56, 380), "97 direct tests, genvm-lint clean, live consensus evidence.", font=font(17), fill=MUTED)
+    draw.text((56, 380), "106 direct tests, genvm-lint clean, live consensus evidence.", font=font(17), fill=MUTED)
     draw.text((56, 420), "github.com/richeroveis/creator-pulse", font=font(19, bold=True, mono=True), fill=ICE)
     shot = ARTIFACTS / "shots" / "home.png"
     if shot.exists():
