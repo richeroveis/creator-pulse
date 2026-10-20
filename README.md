@@ -207,7 +207,7 @@ frontend/                           React, TypeScript, Vite, Tailwind, genlayer-
 frontend/public/proofs/             static proof pages fetched by validators
 evidence/studionet_deployment.json  deploy address, tx table, state and hashes
 evidence/explorer_verification.json explorer re-check of every recorded transaction
-docs/                               logo, screenshots, evidence notes, demo video
+docs/                               logo, screenshots, evidence notes, demo video (tracked)
 .github/workflows/ci.yml            lint, direct tests, identity and frontend build
 ```
 
@@ -408,8 +408,14 @@ soundtrack (AAC, verified with `ffprobe`) and burned-in English subtitles. Regen
 .venv/bin/python tools/make_demo_video.py
 ```
 
-The MP4 is gitignored on `main` because GitHub Pages and git history should stay small. The
-generator and the storyboard are tracked, and the rendered file weighs about 1.5 MB.
+The finished video is tracked on `main` and mirrored into `frontend/public`, so reviewers can open it
+from either place without building anything:
+
+- Repository copy: https://github.com/richeroveis/creator-pulse/raw/main/docs/demo-video-subtitled.mp4
+- Live copy: https://richeroveis.github.io/creator-pulse/demo-video-subtitled.mp4
+
+Both files are byte identical, sha256 `e345cd94c26b2c8c2b39624cd99b8f63ddc425e52459e5b2ed580994ba5dbb50`,
+1,463,529 bytes. Intermediate renders (`*.webm`, `*.wav`, scratch `*.mp4`) stay gitignored.
 
 ---
 
