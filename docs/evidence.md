@@ -6,15 +6,30 @@ file is a human readable companion to the machine readable record in
 
 ## Method
 
-- Every transaction was submitted by a distinct signing account, polled until `status_name == FINALIZED`,
-  and then re-read through the explorer JSON RPC with `get_transaction`.
+- Every transaction was submitted by a distinct signing account and polled until `status_name == FINALIZED`
+  over the studionet RPC while the scenario ran.
+- Afterwards every transaction was re-read independently through the explorer JSON API
+  (`GET https://explorer-studio.genlayer.com/api/transactions/{hash}`) by `scripts/verify_explorer.py`,
+  which checks `FINALIZED`, the contract address, the execution result, the validator vote tally, the
+  absence of any appeal flag, and for guard probes the exact revert string. Result: 28/28 rows PASS at 2026-10-20T13:43:55Z.
 - `result_name` and the leader receipt `execution_result` were recorded for every row. Guard probes are
   expected to finish with `FINISHED_WITH_ERROR`, and the exact revert payload is stored in the JSON.
 - Final state was read with `get_dashboard`, `check_vault_invariants` and `get_token_balance`, not inferred
   from the transaction log.
 - The deployed code identity is the sha256 of `contracts/creator_pulse.py`: `66fab11723efa7bc3603a8537c2f98003649fe9339b2397829146539df1c4d65`.
   The same digest is published in the evidence JSON, `frontend/src/config.ts` and `README.md`, and
-  re-checked by `scripts/verify_identity.py`.
+  re-checked by `scripts/verify_identity.py`. GenLayer does not expose deployed Python source: the
+  explorer has no source field and `eth_getCode` returns `0x` for this address, so the source commit
+  below is the reproducible link between the repository and the deployed bytes.
+
+## Validator agreement on the live audits
+
+Direct mode tests only exercise the leader path. These rows come from the explorer and show what the
+independent validators actually returned for each consensus audit:
+
+- `audit:1`: 3 validator votes agreed, 2 of 4 validators returned the leader result byte for byte, expected band `VIRAL_BONUS_TIER` present in the payload.
+- `audit:2`: 3 validator votes agreed, 3 of 4 validators returned the leader result byte for byte, expected band `TARGET_MET_TIER` present in the payload.
+- `audit:3`: 3 validator votes agreed, 2 of 4 validators returned the leader result byte for byte, expected band `BOT_FRAUD_OR_MISSING_DISCLOSURE_SLASH` present in the payload.
 
 ## Deployment
 
@@ -25,7 +40,9 @@ file is a human readable companion to the machine readable record in
 | Deploy transaction | [0xa0d3b9ddfb9a](https://explorer-studio.genlayer.com/tx/0xa0d3b9ddfb9ae63a9c102f1b32890f67b48925c1e97c21ba4ad941c20280abd4) |
 | Runner | `# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }` |
 | Code sha256 | `66fab11723efa7bc3603a8537c2f98003649fe9339b2397829146539df1c4d65` |
-| Deployed at commit | `19f5b74e65cc9ee8b30ac17a62b169a6a1fb70e6` |
+| Deployed at commit | `422964bf5e262e6485f6e2084bb750d2a799c46c` |
+| Commit tag | `studionet-v1` |
+| Explorer re-verification | 28/28 rows PASS at 2026-10-20T13:43:55Z |
 
 ## Transactions
 
@@ -76,12 +93,12 @@ live app for anyone who wants to exercise `claim_campaign_settlement` after the 
 
 ## Guard probes
 
-| Probe | Expected | Observed |
+| Probe | Expected guard | On chain observation |
 | --- | --- | --- |
-| Brand clawback while the deliverable awaits audit | `PAPITO_LIABILITY_LOCK` | `FINISHED_WITH_ERROR`, payload `[EXPECTED] PAPITO_LIABILITY_LOCK deliverable is awaiting the live audit` |
-| Brand clawback inside the post audit dispute window | `PAPITO_LIABILITY_LOCK` | `FINISHED_WITH_ERROR`, payload `[EXPECTED] PAPITO_LIABILITY_LOCK post audit dispute window is still running` |
-| Curation after settlement | `already settled` | `FINISHED_WITH_ERROR`, payload `[EXPECTED] Campaign is already settled` |
-| Transfer above the caller balance | `Insufficient CPT balance` | `FINISHED_WITH_ERROR`, payload `[EXPECTED] Insufficient CPT balance` |
+| `guard:clawback-submitted` | `PAPITO_LIABILITY_LOCK` | `FINISHED_WITH_ERROR` by explorer row check PASS, payload `[EXPECTED] PAPITO_LIABILITY_LOCK deliverable is awaiting the live audit` |
+| `guard:clawback-evaluated` | `PAPITO_LIABILITY_LOCK` | `FINISHED_WITH_ERROR` by explorer row check PASS, payload `[EXPECTED] PAPITO_LIABILITY_LOCK post audit dispute window is still running` |
+| `guard:curate-after-settlement` | `already settled` | `FINISHED_WITH_ERROR` by explorer row check PASS, payload `[EXPECTED] Campaign is already settled` |
+| `guard:transfer-overdraw` | `Insufficient CPT balance` | `FINISHED_WITH_ERROR` by explorer row check PASS, payload `[EXPECTED] Insufficient CPT balance` |
 | Missing disclosure tag | forced slash band | campaign 3 settled as `BOT_FRAUD_OR_MISSING_DISCLOSURE_SLASH` with creator payout 0 |
 
 ## Reproduce
@@ -92,5 +109,8 @@ pip install -r requirements.txt
 genvm-lint check contracts/creator_pulse.py
 pytest tests/ -q
 python scripts/deploy_studionet.py
+python scripts/verify_explorer.py
+python scripts/record_provenance.py
+python scripts/write_evidence_md.py
 python scripts/verify_identity.py
 ```

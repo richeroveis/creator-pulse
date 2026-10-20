@@ -11,8 +11,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -21,6 +19,10 @@ from typing import Any, Callable
 from dotenv import load_dotenv
 from genlayer_py import create_account, create_client
 from genlayer_py.chains import studionet
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from provenance import resolve_provenance  # noqa: E402
+from report import update_frontend_config, update_readme  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_PATH = ROOT / "contracts" / "creator_pulse.py"
@@ -436,108 +438,16 @@ class Runner:
         return {"dashboard": dashboard, "invariants": invariants, "balances": balances}
 
 
-def consensus_tally(record: dict[str, Any]) -> str:
-    votes = record.get("votes") or {}
-    agree = int(votes.get("agree", 0))
-    disagree = int(votes.get("disagree", 0))
-    return f"{agree} agree / {disagree} disagree"
-
-
-def git_commit() -> str:
-    try:
-        return subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
-        ).stdout.strip()
-    except Exception:
-        return "unknown"
-
-
-def update_frontend_config(address: str, digest: str) -> None:
-    source = CONFIG_PATH.read_text(encoding="utf-8")
-    source = re.sub(
-        r'(export const CONTRACT_ADDRESS =\n\s*\(import\.meta\.env\.VITE_CONTRACT_ADDRESS as string \| undefined\) \?\?\n\s*")[^"]+(")',
-        rf"\g<1>{address}\g<2>",
-        source,
-    )
-    source = re.sub(
-        r'(export const CONTRACT_SHA256 =\n\s*\(import\.meta\.env\.VITE_CONTRACT_SHA256 as string \| undefined\) \?\? ")[^"]+(")',
-        rf"\g<1>{digest}\g<2>",
-        source,
-    )
-    CONFIG_PATH.write_text(source, encoding="utf-8")
-
-
-def update_readme(contract: dict[str, Any], transactions: list[dict[str, Any]], final: dict[str, Any]) -> None:
-    rows = []
-    for item in transactions:
-        label = item["step"]
-        tx = item.get("tx", "")
-        link = f"[{tx[:12]}](https://explorer-studio.genlayer.com/tx/{tx})" if tx else "skipped"
-        rows.append(
-            f"| `{label}` | {link} | {item.get('status', '')} | {item.get('result', '')} | "
-            f"{item.get('execution', '')} | {consensus_tally(item)} |"
-        )
-    tx_table = "\n".join(rows)
-    campaigns = "\n".join(
-        f"| {entry['campaign_id']} | {entry['title']} | `{entry['campaign_band']}` | "
-        f"{int(entry['quality_anchor'])} | {int(entry['creator_payout_atto']) // CPT} | "
-        f"{int(entry['brand_refund_atto']) // CPT} | {entry['state']} |"
-        for entry in final["dashboard"]["campaigns"]
-    )
-    block = f"""### Deployment identity
-
-| Field | Value |
-| --- | --- |
-| Network | studionet, chain id 61999 |
-| Contract | [`{contract['address']}`](https://explorer-studio.genlayer.com/address/{contract['address']}) |
-| Deploy transaction | [`{contract['deploy_tx']}`](https://explorer-studio.genlayer.com/tx/{contract['deploy_tx']}) |
-| Contract file sha256 | `{contract['file_sha256']}` |
-| Deployed code sha256 | `{contract['code_sha256']}` |
-| Runner | `{contract['runner']}` |
-
-Four independent places carry the same code hash: `contracts/creator_pulse.py` on disk,
-`evidence/studionet_deployment.json`, `frontend/src/config.ts` and this README. Run
-`python scripts/verify_identity.py` to re-check all four, plus the address that appears in the
-evidence file and the frontend.
-
-### Transaction table
-
-Every row below was polled to `FINALIZED` and read back through the explorer RPC. Guard probes are
-expected to finish with `FINISHED_WITH_ERROR`; the payload column in the evidence file records the
-exact revert string.
-
-| Step | Transaction | Status | Result | Execution | Votes |
-| --- | --- | --- | --- | --- | --- |
-{tx_table}
-
-### Final campaign state
-
-| Id | Campaign | Band | Anchor | Creator CPT | Brand CPT | State |
-| --- | --- | --- | --- | --- | --- | --- |
-{campaigns}
-
-Vault invariant at the end of the run:
-`vault {int(final['invariants']['vault_custody_balance_atto']) // CPT} CPT == escrow
-{int(final['invariants']['campaign_escrow_atto']) // CPT} + curation
-{int(final['invariants']['curation_escrow_atto']) // CPT}`, drift
-`{int(final['invariants']['drift_atto'])}`.
-
-The raw machine readable record, including every vote tally, payload and final balance, lives in
-[`evidence/studionet_deployment.json`](evidence/studionet_deployment.json).
-"""
-    text = README_PATH.read_text(encoding="utf-8")
-    start = "<!-- DEPLOYMENT_EVIDENCE_START -->"
-    end = "<!-- DEPLOYMENT_EVIDENCE_END -->"
-    replacement = f"{start}\n{block}\n{end}"
-    text = re.sub(re.escape(start) + r".*?" + re.escape(end), replacement, text, flags=re.S)
-    README_PATH.write_text(text, encoding="utf-8")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fresh", action="store_true", help="deploy a brand new contract")
     parser.add_argument("--no-reuse", action="store_true", help="ignore a previous deployment")
     parser.add_argument("--skip-settle", action="store_true", help="stop after the audits")
+    parser.add_argument(
+        "--allow-uncommitted",
+        action="store_true",
+        help="write evidence even if the deployed source is not committed",
+    )
     args = parser.parse_args()
 
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
@@ -596,11 +506,20 @@ def main() -> None:
     print("==", "collect final state", flush=True)
     final = runner.collect()
     contract = runner.state["contract"]
+    provenance = resolve_provenance(contract["file_sha256"])
+    if not provenance["contract_committed"] and not args.allow_uncommitted:
+        print(
+            "refusing to write evidence: the deployed contract file is not committed on HEAD."
+            " Commit it (or pass --allow-uncommitted) and rerun.",
+            flush=True,
+        )
+        sys.exit(2)
     evidence = {
         "project": "CreatorPulse",
         "network": {"name": "studionet", "chain_id": CHAIN_ID, "rpc": RPC_URL},
         "contract": contract,
-        "commit": git_commit(),
+        "commit": provenance["commit"],
+        "provenance": provenance,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "actors": {name: runner.actor(name).address for name in ACTORS},
         "campaigns_configured": CAMPAIGNS,
@@ -610,7 +529,7 @@ def main() -> None:
     EVIDENCE_PATH.write_text(json.dumps(evidence, indent=2, default=str), encoding="utf-8")
 
     update_frontend_config(contract["address"], contract["file_sha256"])
-    update_readme(contract, runner.transactions, final)
+    update_readme(contract, runner.transactions, final, provenance)
 
     failures = [item for item in runner.transactions if not item.get("ok")]
     print(

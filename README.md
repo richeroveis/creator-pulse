@@ -194,13 +194,21 @@ contracts/creator_pulse.py          intelligent contract, pinned runner on line 
 tests/conftest.py                   Windows unlink workaround plus fixtures
 tests/test_creator_pulse_direct.py  106 direct tests, all passing
 scripts/deploy_studionet.py         idempotent live deployment and seeding
-scripts/verify_identity.py          4-way sha256 identity check
+scripts/verify_explorer.py          re-read every transaction through the explorer API
+scripts/record_provenance.py        pin the commit that contains the deployed bytes
+scripts/verify_identity.py          4-way sha256, address, provenance and explorer check
+scripts/write_evidence_md.py        render docs/evidence.md from the evidence JSON
+scripts/ci_seed_genvm.py            pin the direct test runner tarball used by CI
 tools/make_logo.py                  procedural 512x512 logo generator
 tools/generate_soundtrack.py        synthesized demo soundtrack
+tools/make_demo_video.py            subtitled audio backed demo video renderer
+tools/capture_screenshots.py        screenshot the live deployed page
 frontend/                           React, TypeScript, Vite, Tailwind, genlayer-js
 frontend/public/proofs/             static proof pages fetched by validators
 evidence/studionet_deployment.json  deploy address, tx table, state and hashes
-docs/                               logo, demo video, evidence notes
+evidence/explorer_verification.json explorer re-check of every recorded transaction
+docs/                               logo, screenshots, evidence notes, demo video
+.github/workflows/ci.yml            lint, direct tests, identity and frontend build
 ```
 
 ---
@@ -224,13 +232,17 @@ npm run dev
 Live deployment (needs `GENLAYER_PRIVATE_KEY` in this project's own `.env`):
 
 ```bash
-.venv/bin/python scripts/deploy_studionet.py --full
-.venv/bin/python scripts/verify_identity.py
+.venv/bin/python scripts/deploy_studionet.py            # deploys, seeds, audits, settles
+.venv/bin/python scripts/verify_explorer.py             # independent explorer re-check
+.venv/bin/python scripts/record_provenance.py           # pin the deployed source commit
+.venv/bin/python scripts/write_evidence_md.py           # regenerate docs/evidence.md
+.venv/bin/python scripts/verify_identity.py             # 4-way hash, address, provenance
 ```
 
 The deploy script checkpoints every step in `evidence/_deploy_state.json` (gitignored) so a network
 failure resumes instead of duplicating transactions. Burner keys for the demo brands, creators and
-curators live only in that ignored file.
+curators live only in that ignored file. `--fresh` forces a new deployment, and the deployment
+refuses to write evidence unless the deployed contract file is committed.
 
 ---
 
@@ -244,20 +256,29 @@ curators live only in that ignored file.
 | Network | studionet, chain id 61999 |
 | Contract | [`0x031B8ed9391b81fd89107B231F9573bD699e3F38`](https://explorer-studio.genlayer.com/address/0x031B8ed9391b81fd89107B231F9573bD699e3F38) |
 | Deploy transaction | [`0xa0d3b9ddfb9ae63a9c102f1b32890f67b48925c1e97c21ba4ad941c20280abd4`](https://explorer-studio.genlayer.com/tx/0xa0d3b9ddfb9ae63a9c102f1b32890f67b48925c1e97c21ba4ad941c20280abd4) |
+| Source commit | `422964bf5e262e6485f6e2084bb750d2a799c46c` (tag `studionet-v1`) |
 | Contract file sha256 | `66fab11723efa7bc3603a8537c2f98003649fe9339b2397829146539df1c4d65` |
-| Deployed code sha256 | `66fab11723efa7bc3603a8537c2f98003649fe9339b2397829146539df1c4d65` |
 | Runner | `# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }` |
+
+The source commit is resolved by hashing the contract blob at every commit that touched
+`contracts/creator_pulse.py` and keeping the newest one whose digest equals the deployed file, so
+`git show 422964bf5e262e6485f6e2084bb750d2a799c46c:contracts/creator_pulse.py` reproduces the row above.
 
 Four independent places carry the same code hash: `contracts/creator_pulse.py` on disk,
 `evidence/studionet_deployment.json`, `frontend/src/config.ts` and this README. Run
-`python scripts/verify_identity.py` to re-check all four, plus the address that appears in the
-evidence file and the frontend.
+`python scripts/verify_identity.py` to re-check all four, the address in the evidence file and the
+frontend, and the source commit provenance.
 
 ### Transaction table
 
-Every row below was polled to `FINALIZED` and read back through the explorer RPC. Guard probes are
-expected to finish with `FINISHED_WITH_ERROR`; the payload column in the evidence file records the
-exact revert string.
+studionet does not publish deployed Python source: the explorer has no source field and
+`eth_getCode` returns `0x` for this address. Identity therefore rests on the deploy transaction, the
+source commit and the file digest above. Every row below was polled to `FINALIZED` over the RPC while
+the scenario ran, then re-read independently through the explorer JSON API by
+`python scripts/verify_explorer.py`, which also checks the validator votes and the exact revert
+payload of each guard probe. Guard probes are expected to finish with `FINISHED_WITH_ERROR`.
+
+Explorer re-verification: 28/28 rows PASS, checked 2026-10-20T13:43:55Z.
 
 | Step | Transaction | Status | Result | Execution | Votes |
 | --- | --- | --- | --- | --- | --- |
@@ -304,7 +325,8 @@ Vault invariant at the end of the run:
 `0`.
 
 The raw machine readable record, including every vote tally, payload and final balance, lives in
-[`evidence/studionet_deployment.json`](evidence/studionet_deployment.json).
+[`evidence/studionet_deployment.json`](evidence/studionet_deployment.json), and the explorer
+re-check lives in [`evidence/explorer_verification.json`](evidence/explorer_verification.json).
 
 <!-- DEPLOYMENT_EVIDENCE_END -->
 
@@ -371,14 +393,15 @@ The raw machine readable record, including every vote tally, payload and final b
 ## Demo video
 
 `docs/demo-video-subtitled.mp4` is a 48 second 1280x720 walkthrough with a synthesized ambient
-soundtrack and burned-in English subtitles. Regenerate it with:
+soundtrack (AAC, verified with `ffprobe`) and burned-in English subtitles. Regenerate it with:
 
 ```bash
 .venv/bin/python tools/generate_soundtrack.py
+.venv/bin/python tools/make_demo_video.py
 ```
 
 The MP4 is gitignored on `main` because GitHub Pages and git history should stay small. The
-generator and the storyboard are tracked.
+generator and the storyboard are tracked, and the rendered file weighs about 1.5 MB.
 
 ---
 

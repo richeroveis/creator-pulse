@@ -12,7 +12,7 @@
     "code_sha256": "66fab11723efa7bc3603a8537c2f98003649fe9339b2397829146539df1c4d65",
     "runner": "# { \"Depends\": \"py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6\" }"
   },
-  "commit": "19f5b74e65cc9ee8b30ac17a62b169a6a1fb70e6",
+  "commit": "422964bf5e262e6485f6e2084bb750d2a799c46c",
   "generated_at": "2026-10-20T12:20:33Z",
   "actors": {
     "brand_nova": "0xC3669371756d1cD32EeedAA82eC78F9408A69a71",
@@ -620,5 +620,19 @@
       "curator_lin": 2820000000000000000000,
       "curator_ada": 2970000000000000000000
     }
+  },
+  "provenance": {
+    "commit": "422964bf5e262e6485f6e2084bb750d2a799c46c",
+    "commit_tag": "studionet-v1",
+    "head_at_evidence": "04f04e6c82376c523ea51e2d9af5e2089ab84088",
+    "deployed_file_sha256": "66fab11723efa7bc3603a8537c2f98003649fe9339b2397829146539df1c4d65",
+    "contract_committed": true
+  },
+  "explorer_verification": {
+    "total": 28,
+    "passed": 28,
+    "failed": 0,
+    "checked_at": "2026-10-20T13:43:55Z",
+    "explorer": "https://explorer-studio.genlayer.com"
   }
 }
