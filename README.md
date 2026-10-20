@@ -360,6 +360,14 @@ re-check lives in [`evidence/explorer_verification.json`](evidence/explorer_veri
 - Audit liveness depends on the validator set agreeing on the external fetch. Every audit is permissionless
   and retryable, and there is deliberately no timeout refund, because a timeout refund would let a brand
   escape an audit it is about to lose.
+- OPEN, permanent dead evidence: if a submitted proof page becomes permanently unreadable, the audit
+  reverts fail closed and the campaign stays `SUBMITTED` with its escrow locked. No timed escape exists in
+  that state, because the PAPITO red line forbids the brand from reclaiming while a deliverable awaits
+  audit. The partial mitigation is that `content_proof_url` must be an absolute public `https` host, the
+  audit is open to any caller, and the creator keeps the strongest incentive to keep the page alive since
+  the payout depends on it. A future version could add a consensus decided "dead evidence" band that
+  returns the bond to the creator and the escrow to the brand without paying any bonus, which a brand
+  could not use to escape a readable page.
 - `check_vault_invariants` and `_resync_top_curated` scan campaigns linearly. That is fine at the campaign
   counts used here. A high volume deployment would maintain running totals in storage instead.
 - Direct tests exercise the leader path only. Validator agreement is proven by the three live studionet
