@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install
+        run: pip install -r requirements.txt
+      - name: download genvm
+        run: genvm-lint download
+      - name: lint
+        run: genvm-lint check contracts/creator_pulse.py
+      - name: direct tests
+        run: pytest tests/ -q
+      - name: identity
+        run: python scripts/verify_identity.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: install
+        run: npm ci
+      - name: build
+        run: npm run build

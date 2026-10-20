@@ -11,6 +11,6 @@ networks:
 
 paths:
   contracts: contracts
-  artifacts: artifacts
+  artifacts: .gltest_cache/artifacts
 
 environment: .env
