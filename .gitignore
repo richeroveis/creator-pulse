@@ -18,10 +18,13 @@ dist/
 dist-ssr/
 *.local
 
-# Media (regenerated locally, never tracked on main)
+# Media: intermediate renders stay ignored. The final demo video is tracked on main
+# and mirrored into frontend/public so it ships inside the GitHub Pages bundle.
 *.mp4
 *.webm
 *.wav
+!docs/demo-video-subtitled.mp4
+!frontend/public/demo-video-subtitled.mp4
 
 # Evidence runtime state
 evidence/_checkpoint.json
