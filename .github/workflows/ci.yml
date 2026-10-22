@@ -34,6 +34,8 @@ jobs:
         run: pytest tests/ -q
       - name: identity
         run: python scripts/verify_identity.py
+      - name: frontend bindings
+        run: python scripts/check_frontend_bindings.py
 
   frontend:
     runs-on: ubuntu-latest

@@ -103,9 +103,9 @@ export function Simulator({ api }: { api: PulseApi }) {
             Simulate the exact payout band
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/50">
-            The four anchors are the only scores the contract accepts. Move the sliders to see how the
-            shared invariant helper splits base reward, viral bonus pool and the creator anti-bot bond.
-            The preview can be re-checked against the deployed helper in one RPC call.
+            Illustration only. This studio mirrors the shared helper so you can see how a band would
+            split base reward, viral bonus pool and the creator bond. It never moves funds. Real money
+            only moves through the audited on chain settlement actions.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -295,7 +295,7 @@ export function Simulator({ api }: { api: PulseApi }) {
           )}
 
           <div className="mt-5 flex items-center gap-2 text-[11px] text-white/30">
-            <Sparkles size={12} /> Preview only. On chain settlement reads the same helper from storage.
+            <Sparkles size={12} /> Illustration only. This preview never settles anything; on chain settlement reads the same helper from storage.
           </div>
         </div>
       </div>

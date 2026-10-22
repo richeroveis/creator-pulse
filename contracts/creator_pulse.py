@@ -20,6 +20,7 @@ STATE_SUBMITTED = "SUBMITTED"
 STATE_EVALUATED = "EVALUATED"
 STATE_SETTLED = "SETTLED"
 STATE_CANCELLED = "CANCELLED"
+STATE_RECOVERED = "RECOVERED"
 
 BAND_VIRAL = "VIRAL_BONUS_TIER"
 BAND_TARGET = "TARGET_MET_TIER"
@@ -42,6 +43,15 @@ MAX_CAMPAIGN_WINDOW_SECONDS: int = 60 * 60 * 24 * 90
 DISPUTE_WINDOW_SECONDS: int = 90
 MAX_PROOF_TEXT_CHARS: int = 6000
 MAX_CAMPAIGNS_PER_PAGE: int = 24
+
+# Safe recovery from SUBMITTED when an audit can never complete. Both windows are
+# measured from submitted_clock and are validated with a floor and a ceiling.
+# Path a (evidence unreachable) needs validators to agree the page cannot be read.
+# Path b (hard timeout) needs only that the campaign was never evaluated.
+RECOVER_UNREACHABLE_MIN_SECONDS: int = 60 * 60
+RECOVER_UNREACHABLE_MAX_SECONDS: int = 60 * 60 * 24 * 7
+RECOVER_TIMEOUT_MIN_SECONDS: int = 60 * 60 * 24 * 7
+RECOVER_TIMEOUT_MAX_SECONDS: int = 60 * 60 * 24 * 90
 
 ZERO_ADDRESS_BYTES = b"\x00" * 20
 
@@ -74,6 +84,14 @@ Return one JSON object with exactly these keys:
 "viral_velocity": integer from 0 to 100 estimating how fast reach is compounding
 "evidence": one short sentence quoting the strongest evidence you used
 Do not add any other keys."""
+
+UNREACHABLE_PRINCIPLE = (
+    "The two answers must agree exactly on the single boolean field "
+    "proof_unreachable. proof_unreachable is true only when the proof URL cannot be "
+    "rendered into readable text by an independent fetch. If the page returns "
+    "readable text the field is false. If either answer reports an error instead of "
+    "a boolean result, the answers do not agree."
+)
 
 
 # ---------------------------------------------------------------- storage
@@ -110,6 +128,8 @@ class Campaign:
     submitted_clock: u256
     evaluated_clock: u256
     settlement_unlock_clock: u256
+    recovered: bool
+    recovered_clock: u256
 
 
 # ---------------------------------------------------------------- pure helpers
@@ -306,6 +326,23 @@ def _audit_deliverable(proof_url: str, brand_tag_token: str, required_spec: str)
     }
 
 
+def _probe_proof_unreachable(proof_url: str) -> dict:
+    """Deterministic per-validator probe used only for the unreachable recovery path.
+
+    Returns exactly one boolean field. It never reads or writes contract storage, so
+    every validator that runs it against the same URL reaches the same answer.
+    """
+    try:
+        rendered = gl.nondet.web.render(proof_url, mode="text")
+    except gl.vm.UserError:
+        return {"proof_unreachable": True}
+    except Exception:
+        return {"proof_unreachable": True}
+    raw_text = rendered if isinstance(rendered, str) else str(rendered)
+    readable = len(" ".join(raw_text.split())) >= 20
+    return {"proof_unreachable": not readable}
+
+
 def _compute_campaign_band(
     quality_anchor: int,
     disclosure_verified: bool,
@@ -465,6 +502,8 @@ class CreatorPulse(gl.Contract):
             "submitted_clock": int(campaign.submitted_clock),
             "evaluated_clock": int(campaign.evaluated_clock),
             "settlement_unlock_clock": int(campaign.settlement_unlock_clock),
+            "recovered": bool(campaign.recovered),
+            "recovered_clock": int(campaign.recovered_clock),
         }
 
     def _resync_top_curated(self) -> None:
@@ -499,6 +538,53 @@ class CreatorPulse(gl.Contract):
             self.top_curated_stake = u256(stake)
         elif current_top == int(campaign_id):
             self._resync_top_curated()
+
+    def _execute_neutral_recovery(self, campaign: Campaign, reason: str) -> dict:
+        """Shared deterministic transition SUBMITTED -> RECOVERED.
+
+        Neutral by construction: the creator gets the bond back, the brand gets the
+        base reward plus the viral pool back, and no bonus is paid and no slash is
+        applied. Community curation stakes stay in custody and are pulled back
+        through claim_curation_refund, so one unreachable curator address can never
+        block the recovery. There is no non deterministic call in here.
+        """
+        if campaign.state != STATE_SUBMITTED:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Recovery is only possible from SUBMITTED")
+        base = int(campaign.base_reward)
+        viral = int(campaign.viral_bonus_pool)
+        bond = int(campaign.required_creator_bond)
+        brand = campaign.brand
+        creator = campaign.creator
+        escrow_release = base + viral + bond
+        if escrow_release > int(self.vault_custody_balance):
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Vault custody balance is inconsistent")
+
+        self.vault_custody_balance = u256(int(self.vault_custody_balance) - escrow_release)
+        self._credit(brand, base + viral)
+        self._credit(creator, bond)
+
+        campaign.state = STATE_RECOVERED
+        campaign.recovered = True
+        campaign.recovered_clock = u256(_now_clock())
+        self._save_campaign(campaign)
+        self._sync_top_curated_campaign(campaign.campaign_id)
+
+        return {
+            "campaign_id": int(campaign.campaign_id),
+            "reason": reason,
+            "state": STATE_RECOVERED,
+            "brand": brand.as_hex,
+            "brand_refunded_atto": base + viral,
+            "creator": creator.as_hex,
+            "creator_bond_returned_atto": bond,
+            "escrow_released_atto": escrow_release,
+            "bonus_paid_atto": 0,
+            "bond_slashed_atto": 0,
+            "curation_still_refundable_atto": int(campaign.curation_stake_total)
+            - int(campaign.curation_refunded_total),
+            "vault_custody_balance_atto": int(self.vault_custody_balance),
+            "recovered_clock": int(campaign.recovered_clock),
+        }
 
     # ------------------------------------------------------------ token flows
 
@@ -621,6 +707,8 @@ class CreatorPulse(gl.Contract):
             submitted_clock=u256(0),
             evaluated_clock=u256(0),
             settlement_unlock_clock=u256(0),
+            recovered=False,
+            recovered_clock=u256(0),
         )
         self.campaigns[_campaign_key(campaign_id)] = campaign
         self.campaign_count = u256(campaign_id)
@@ -674,6 +762,8 @@ class CreatorPulse(gl.Contract):
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Campaign is already settled")
         if campaign.state == STATE_CANCELLED:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Campaign was cancelled")
+        if campaign.state == STATE_RECOVERED:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Campaign funds were recovered")
         if campaign.state == STATE_OPEN:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Campaign has no submitted deliverable to curate")
         stake = int(curation_stake)
@@ -783,6 +873,8 @@ class CreatorPulse(gl.Contract):
     @gl.public.write
     def claim_campaign_settlement(self, campaign_id: u256) -> dict:
         campaign = self._require_campaign(campaign_id)
+        if campaign.state == STATE_RECOVERED:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Campaign funds were recovered")
         if not campaign.evaluated:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Campaign has no consensus evaluation yet")
         if campaign.settled or campaign.state == STATE_SETTLED:
@@ -825,8 +917,10 @@ class CreatorPulse(gl.Contract):
     @gl.public.write
     def claim_curation_refund(self, campaign_id: u256) -> dict:
         campaign = self._require_campaign(campaign_id)
-        if not campaign.settled:
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} Curation refunds unlock only after settlement")
+        if not (campaign.settled or campaign.state == STATE_RECOVERED):
+            raise gl.vm.UserError(
+                f"{ERROR_EXPECTED} Curation refunds unlock only after settlement or recovery"
+            )
         curator = gl.message.sender_address
         curator_key = self._curator_key(campaign_id, curator)
         stake = int(self.curation_stakes.get(curator_key, 0))
@@ -852,6 +946,10 @@ class CreatorPulse(gl.Contract):
     def withdraw_campaign_liquidity(self, campaign_id: u256) -> dict:
         campaign = self._require_campaign(campaign_id)
         caller = gl.message.sender_address
+        if campaign.state == STATE_RECOVERED:
+            raise gl.vm.UserError(
+                f"{ERROR_EXPECTED} PAPITO_LIABILITY_LOCK campaign funds were recovered"
+            )
         if caller != campaign.brand:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Only the funding brand may reclaim liquidity")
         if campaign.state == STATE_SETTLED or campaign.settled:
@@ -886,6 +984,81 @@ class CreatorPulse(gl.Contract):
             "vault_custody_balance_atto": int(self.vault_custody_balance),
         }
 
+    # ------------------------------------------------------------ safe recovery
+
+    @gl.public.write
+    def recover_unreachable_deliverable(self, campaign_id: u256) -> dict:
+        """Path a: neutral recovery when validators agree the proof page is dead.
+
+        Permissionless to call, but the funds only ever move to the rightful brand
+        and creator. Validators independently fetch the proof URL and must agree on
+        exactly one boolean. If the page is readable the call reverts and the audit
+        path stays the only way forward, so a brand can never use this to escape an
+        audit it is about to lose.
+        """
+        campaign = self._require_campaign(campaign_id)
+        if campaign.state != STATE_SUBMITTED:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Recovery is only possible from SUBMITTED")
+
+        now = _now_clock()
+        elapsed = now - int(campaign.submitted_clock)
+        if elapsed < RECOVER_UNREACHABLE_MIN_SECONDS:
+            raise gl.vm.UserError(
+                f"{ERROR_EXPECTED} Unreachable recovery window has not opened yet"
+            )
+        if elapsed > RECOVER_UNREACHABLE_MAX_SECONDS:
+            raise gl.vm.UserError(
+                f"{ERROR_EXPECTED} Unreachable recovery window has closed, use the hard timeout"
+            )
+
+        # Snapshot every settlement input into plain locals before the consensus call.
+        snap_id = int(campaign.campaign_id)
+        snap_url = campaign.content_proof_url
+
+        def leader_fn() -> dict:
+            return _probe_proof_unreachable(snap_url)
+
+        verdict = gl.eq_principle.prompt_comparative(leader_fn, principle=UNREACHABLE_PRINCIPLE)
+        if not isinstance(verdict, dict):
+            raise gl.vm.UserError(f"{ERROR_LLM} Unreachable probe returned a non object verdict")
+        flag = verdict.get("proof_unreachable")
+        if not isinstance(flag, bool):
+            raise gl.vm.UserError(f"{ERROR_LLM} Unreachable probe returned a non boolean field")
+        if flag is not True:
+            raise gl.vm.UserError(
+                f"{ERROR_EXPECTED} Proof page is readable, only the audit path may proceed"
+            )
+
+        result = self._execute_neutral_recovery(campaign, reason="EVIDENCE_UNREACHABLE")
+        result["consensus_proof_unreachable"] = True
+        result["campaign_id"] = snap_id
+        return result
+
+    @gl.public.write
+    def recover_hard_timeout(self, campaign_id: u256) -> dict:
+        """Path b: neutral recovery after a long window when the audit never ran.
+
+        Covers the case where validators cannot agree on the fetch at all. It is only
+        allowed after a much longer window since submission and only while the
+        campaign was never evaluated, so it can never compete with a live audit.
+        """
+        campaign = self._require_campaign(campaign_id)
+        if campaign.state != STATE_SUBMITTED:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Recovery is only possible from SUBMITTED")
+        if campaign.evaluated:
+            raise gl.vm.UserError(
+                f"{ERROR_EXPECTED} Campaign was evaluated, settle or recover unreachable instead"
+            )
+
+        now = _now_clock()
+        elapsed = now - int(campaign.submitted_clock)
+        if elapsed < RECOVER_TIMEOUT_MIN_SECONDS:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Hard timeout window has not opened yet")
+        if elapsed > RECOVER_TIMEOUT_MAX_SECONDS:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Hard timeout window has closed")
+
+        return self._execute_neutral_recovery(campaign, reason="HARD_TIMEOUT")
+
     # ------------------------------------------------------------ views
 
     @gl.public.view
@@ -901,9 +1074,22 @@ class CreatorPulse(gl.Contract):
             "min_campaign_window_seconds": MIN_CAMPAIGN_WINDOW_SECONDS,
             "max_campaign_window_seconds": MAX_CAMPAIGN_WINDOW_SECONDS,
             "dispute_window_seconds": DISPUTE_WINDOW_SECONDS,
+            "recover_unreachable_min_seconds": RECOVER_UNREACHABLE_MIN_SECONDS,
+            "recover_unreachable_max_seconds": RECOVER_UNREACHABLE_MAX_SECONDS,
+            "recover_timeout_min_seconds": RECOVER_TIMEOUT_MIN_SECONDS,
+            "recover_timeout_max_seconds": RECOVER_TIMEOUT_MAX_SECONDS,
+            "states": [
+                STATE_OPEN,
+                STATE_SUBMITTED,
+                STATE_EVALUATED,
+                STATE_SETTLED,
+                STATE_CANCELLED,
+                STATE_RECOVERED,
+            ],
             "bands": [BAND_VIRAL, BAND_TARGET, BAND_PARTIAL, BAND_SLASH],
             "anchors": [ANCHOR_VIRAL, ANCHOR_TARGET, ANCHOR_PARTIAL, ANCHOR_SLASH],
             "audit_principle": AUDIT_PRINCIPLE,
+            "unreachable_principle": UNREACHABLE_PRINCIPLE,
         }
 
     @gl.public.view

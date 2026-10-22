@@ -129,7 +129,7 @@ export function usePulse() {
   const run = useCallback(
     async (
       label: string,
-      fn: (session: WalletSession) => Promise<{ execution: string; hash?: string; error?: string }>,
+      fn: (session: WalletSession) => Promise<{ execution: string; hash?: string; error?: string; returned?: unknown }>,
     ) => {
       if (!wallet) {
         setError("Connect a wallet first.");
@@ -142,7 +142,7 @@ export function usePulse() {
         if (result.error || result.execution !== "SUCCESS") {
           pushLog({
             kind: "error",
-            title: `${label} reverted as expected` ,
+            title: `${label} reverted`,
             detail: result.error ? humanError(result.error) : result.execution,
             hash: result.hash,
           });
@@ -217,9 +217,77 @@ export function usePulse() {
 
   const withdrawLiquidity = useCallback(
     (campaignId: number) =>
-      run("Brand clawback probe", async (session) => {
+      run("Withdraw liquidity", async (session) => {
         const result = await writeFunction(session.client, "withdraw_campaign_liquidity", [
           campaignId,
+        ]);
+        return result;
+      }),
+    [run],
+  );
+
+  const createCampaign = useCallback(
+    (input: {
+      title: string;
+      tag: string;
+      spec: string;
+      baseCpt: number;
+      viralCpt: number;
+      bondCpt: number;
+      deadlineUnix: number;
+    }) =>
+      run("Create campaign", async (session) => {
+        const result = await writeFunction(session.client, "create_campaign", [
+          input.title,
+          input.tag,
+          input.spec,
+          BigInt(Math.round(input.baseCpt)) * BigInt(CPT),
+          BigInt(Math.round(input.viralCpt)) * BigInt(CPT),
+          BigInt(Math.round(input.bondCpt)) * BigInt(CPT),
+          input.deadlineUnix,
+        ]);
+        return result;
+      }),
+    [run],
+  );
+
+  const verify = useCallback(
+    (campaignId: number) =>
+      run("Verify deliverable", async (session) => {
+        const result = await writeFunction(session.client, "verify_campaign_deliverable_live", [
+          campaignId,
+        ]);
+        return result;
+      }),
+    [run],
+  );
+
+  const recoverUnreachable = useCallback(
+    (campaignId: number) =>
+      run("Recover unreachable evidence", async (session) => {
+        const result = await writeFunction(session.client, "recover_unreachable_deliverable", [
+          campaignId,
+        ]);
+        return result;
+      }),
+    [run],
+  );
+
+  const recoverHardTimeout = useCallback(
+    (campaignId: number) =>
+      run("Recover hard timeout", async (session) => {
+        const result = await writeFunction(session.client, "recover_hard_timeout", [campaignId]);
+        return result;
+      }),
+    [run],
+  );
+
+  const transfer = useCallback(
+    (to: string, amountCpt: number) =>
+      run("Transfer CPT", async (session) => {
+        const result = await writeFunction(session.client, "transfer_tokens", [
+          to,
+          BigInt(Math.round(amountCpt)) * BigInt(CPT),
         ]);
         return result;
       }),
@@ -293,8 +361,13 @@ export function usePulse() {
     claim,
     refundCuration,
     withdrawLiquidity,
+    createCampaign,
     createProbeCampaign,
     submitDeliverable,
+    verify,
+    recoverUnreachable,
+    recoverHardTimeout,
+    transfer,
     previewBand,
     setError,
   };

@@ -75,14 +75,15 @@ export async function writeFunction(
     args,
     value: 0n,
   })) as string;
-  onStatus?.(`accepted by the network, waiting for consensus ${hash.slice(0, 10)}`);
+  onStatus?.(`submitted ${hash.slice(0, 10)}, waiting for validator consensus`);
   const receipt = (await client.waitForTransactionReceipt({
     hash: hash as `0x${string}` & { length: 66 },
-    status: "ACCEPTED" as TransactionStatus,
-    retries: 120,
+    status: "FINALIZED" as TransactionStatus,
+    retries: 200,
     interval: 3000,
   })) as Record<string, unknown>;
   const status = String(receipt.status_name ?? receipt.status ?? "UNKNOWN");
+  onStatus?.(`${status} ${hash.slice(0, 10)}`);
   const consensus = receipt.consensus_data as
     | { leader_receipt?: Array<Record<string, unknown>> }
     | undefined;
@@ -98,6 +99,12 @@ export async function writeFunction(
   const result: WriteResult = { hash, status, execution };
   if (execution !== "SUCCESS") {
     result.error = payload || stderr || `Execution finished with ${execution}`;
+  } else if (payload) {
+    try {
+      result.returned = JSON.parse(payload);
+    } catch {
+      result.returned = payload;
+    }
   }
   onStatus?.(`${status} / ${execution}`);
   return result;

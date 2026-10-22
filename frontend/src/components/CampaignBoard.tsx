@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
   CircleDollarSign,
@@ -6,12 +6,15 @@ import {
   ExternalLink,
   Gavel,
   Layers,
+  RefreshCcw,
   ScanEye,
   ShieldCheck,
+  LifeBuoy,
   UploadCloud,
   Users,
 } from "lucide-react";
 import type { PulseApi } from "../hooks/usePulse";
+import { explorerTx } from "../config";
 import {
   BAND_LABEL,
   BAND_TONE,
@@ -20,9 +23,26 @@ import {
   fmtCpt,
   relativeClock,
   shortAddr,
+  txShort,
   type Campaign,
 } from "../lib/format";
+import { validateProofUrl } from "../lib/validation";
 import { sound } from "../lib/sound";
+
+// Mirror of the contract recovery windows, shown only to explain the buttons.
+const RECOVER_UNREACHABLE_MIN_SECONDS = 60 * 60;
+const RECOVER_TIMEOUT_MIN_SECONDS = 60 * 60 * 24 * 7;
+
+type Feedback = { kind: "idle" | "ok" | "err"; text: string; hash?: string };
+
+function useNowSeconds(): number {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 10000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now;
+}
 
 function Meter({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
@@ -47,13 +67,42 @@ function CampaignCard({
   api: PulseApi;
   onInspect: (id: number) => void;
 }) {
-  const { wallet, balance, busy, curate, claim, refundCuration, submitDeliverable } = api;
+  const {
+    wallet,
+    balance,
+    busy,
+    curate,
+    claim,
+    refundCuration,
+    submitDeliverable,
+    verify,
+    recoverUnreachable,
+    recoverHardTimeout,
+    withdrawLiquidity,
+  } = api;
   const [stake, setStake] = useState(25);
+  const defaultProof = `https://richeroveis.github.io/creator-pulse/proofs/campaign-${Math.min(campaign.campaign_id, 3)}.html`;
+  const [proofUrl, setProofUrl] = useState(defaultProof);
+  const [feedback, setFeedback] = useState<Feedback>({ kind: "idle", text: "" });
+  const now = useNowSeconds();
+  const runAction = async (label: string, fn: () => Promise<{ execution: string; hash?: string; error?: string } | null>) => {
+    if (busy !== null) return;
+    setFeedback({ kind: "idle", text: `${label} submitted, waiting for FINALIZED` });
+    const result = await fn();
+    if (!result) {
+      setFeedback({ kind: "err", text: `${label} failed, connect a wallet or retry` });
+      return;
+    }
+    if (result.error || result.execution !== "SUCCESS") {
+      setFeedback({ kind: "err", text: result.error ?? result.execution, hash: result.hash });
+    } else {
+      setFeedback({ kind: "ok", text: `${label} finalized`, hash: result.hash });
+    }
+  };
   const isMine =
     wallet &&
     (campaign.brand.toLowerCase() === wallet.address.toLowerCase() ||
       campaign.creator.toLowerCase() === wallet.address.toLowerCase());
-  const canSubmit = campaign.state === "OPEN" && wallet !== null;
   const needsBond = balance !== null && cpt(balance) < cpt(campaign.required_creator_bond_atto);
 
   return (
@@ -159,80 +208,178 @@ function CampaignCard({
         </a>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {canSubmit && (
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() =>
-              submitDeliverable(
-                campaign.campaign_id,
-                `https://richeroveis.github.io/creator-pulse/proofs/campaign-${Math.min(campaign.campaign_id, 3)}.html`,
-              )
-            }
-            className="btn-primary px-3 py-2 text-[12px]"
-            title={needsBond ? "Claim CPT from the faucet first to cover the bond" : "Lock the bond and submit"}
-          >
-            <UploadCloud size={14} /> Submit deliverable
-          </button>
-        )}
-        {(campaign.state === "SUBMITTED" || campaign.state === "EVALUATED") && (
-          <div className="flex items-center gap-1.5">
-            <input
-              type="number"
-              min={5}
-              step={5}
-              value={stake}
-              onChange={(event) => setStake(Number(event.target.value))}
-              className="w-16 rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-center font-mono text-[12px] text-white outline-none focus:border-pulse-violet/60"
-              aria-label="Curation stake in CPT"
-            />
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => curate(campaign.campaign_id, stake)}
-              className="btn-ghost px-3 py-2 text-[12px]"
-            >
-              <Layers size={14} /> Curate
-            </button>
-          </div>
-        )}
-        {campaign.evaluated && !campaign.settled && (
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => claim(campaign.campaign_id)}
-            className="btn-emerald px-3 py-2 text-[12px]"
-          >
-            <Gavel size={14} /> Claim settlement
-          </button>
-        )}
-        {campaign.settled && (
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => refundCuration(campaign.campaign_id)}
-            className="btn-ghost px-3 py-2 text-[12px]"
-          >
-            <CircleDollarSign size={14} /> Refund my stake
-          </button>
-        )}
-        <a
-          href={`https://explorer-studio.genlayer.com/address/${campaign.brand}`}
-          target="_blank"
-          rel="noreferrer"
-          className="ml-auto inline-flex items-center gap-1 text-[11px] text-white/35 transition hover:text-white/70"
-        >
-          brand on explorer <ArrowUpRight size={11} />
-        </a>
-      </div>
+      {(() => {
+        const urlError = validateProofUrl(proofUrl);
+        const isBrand = !!wallet && campaign.brand.toLowerCase() === wallet.address.toLowerCase();
+        const disputeClosed = campaign.settlement_unlock_clock !== 0 && now >= campaign.settlement_unlock_clock;
+        const canClaim = campaign.evaluated && !campaign.settled && disputeClosed;
+        const canRefund = campaign.settled || campaign.state === "RECOVERED";
+        const elapsed = campaign.submitted_clock ? now - campaign.submitted_clock : 0;
+        const unreachableReady = campaign.state === "SUBMITTED" && elapsed >= RECOVER_UNREACHABLE_MIN_SECONDS;
+        const timeoutReady = campaign.state === "SUBMITTED" && elapsed >= RECOVER_TIMEOUT_MIN_SECONDS;
+        const curatable =
+          (campaign.state === "SUBMITTED" || campaign.state === "EVALUATED") &&
+          !campaign.settled;
+        return (
+          <>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {campaign.state === "OPEN" && (
+                <div className="flex w-full flex-col gap-2">
+                  <input
+                    type="url"
+                    value={proofUrl}
+                    onChange={(event) => setProofUrl(event.target.value)}
+                    placeholder="https://public-host/proof.html"
+                    className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 font-mono text-[12px] text-white outline-none focus:border-pulse-violet/60"
+                    aria-label="Proof URL"
+                  />
+                  {urlError && <p className="text-[11px] text-pulse-magenta">{urlError}</p>}
+                  <button
+                    type="button"
+                    disabled={busy !== null || !!urlError || !wallet}
+                    onClick={() =>
+                      runAction("Submit deliverable", () => submitDeliverable(campaign.campaign_id, proofUrl.trim()))
+                    }
+                    className="btn-primary px-3 py-2 text-[12px] disabled:opacity-40"
+                    title={needsBond ? "Claim CPT from the faucet first to cover the bond" : "Lock the bond and submit"}
+                  >
+                    <UploadCloud size={14} /> Accept and submit deliverable
+                  </button>
+                </div>
+              )}
+              {campaign.state === "SUBMITTED" && !campaign.evaluated && (
+                <button
+                  type="button"
+                  disabled={busy !== null || !wallet}
+                  onClick={() => runAction("Verify", () => verify(campaign.campaign_id))}
+                  className="btn-primary px-3 py-2 text-[12px] disabled:opacity-40"
+                  title="Validators fetch the proof URL and must agree on the band"
+                >
+                  <ScanEye size={14} /> Verify deliverable
+                </button>
+              )}
+              {curatable && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={5}
+                    step={5}
+                    value={stake}
+                    onChange={(event) => setStake(Number(event.target.value))}
+                    className="w-16 rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-center font-mono text-[12px] text-white outline-none focus:border-pulse-violet/60"
+                    aria-label="Curation stake in CPT"
+                  />
+                  <button
+                    type="button"
+                    disabled={busy !== null || !wallet}
+                    onClick={() => runAction("Curate", () => curate(campaign.campaign_id, stake))}
+                    className="btn-ghost px-3 py-2 text-[12px] disabled:opacity-40"
+                  >
+                    <Layers size={14} /> Curate
+                  </button>
+                </div>
+              )}
+              {campaign.state === "EVALUATED" && !campaign.settled && (
+                <button
+                  type="button"
+                  disabled={busy !== null || !canClaim || !wallet}
+                  onClick={() => runAction("Claim settlement", () => claim(campaign.campaign_id))}
+                  className="btn-emerald px-3 py-2 text-[12px] disabled:opacity-40"
+                  title={canClaim ? "Dispute window closed" : "Settlement unlocks after the consensus audit and the dispute window"}
+                >
+                  <Gavel size={14} /> Claim settlement
+                </button>
+              )}
+              {canRefund && (
+                <button
+                  type="button"
+                  disabled={busy !== null || !wallet}
+                  onClick={() => runAction("Curation refund", () => refundCuration(campaign.campaign_id))}
+                  className="btn-ghost px-3 py-2 text-[12px] disabled:opacity-40"
+                >
+                  <CircleDollarSign size={14} /> Claim curation refund
+                </button>
+              )}
+              {campaign.state === "SUBMITTED" && (
+                <>
+                  <button
+                    type="button"
+                    disabled={busy !== null || !unreachableReady || !wallet}
+                    onClick={() => runAction("Recover unreachable", () => recoverUnreachable(campaign.campaign_id))}
+                    className="btn-ghost px-3 py-2 text-[12px] disabled:opacity-40"
+                    title={unreachableReady ? "Neutral recovery if validators agree the page is dead" : "Unreachable recovery opens 1 hour after submission"}
+                  >
+                    <LifeBuoy size={14} /> Recover unreachable
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy !== null || !timeoutReady || !wallet}
+                    onClick={() => runAction("Recover hard timeout", () => recoverHardTimeout(campaign.campaign_id))}
+                    className="btn-ghost px-3 py-2 text-[12px] disabled:opacity-40"
+                    title={timeoutReady ? "Neutral recovery after the 7 day hard timeout" : "Hard timeout recovery opens 7 days after submission"}
+                  >
+                    <RefreshCcw size={14} /> Recover hard timeout
+                  </button>
+                </>
+              )}
+              {isBrand && campaign.state === "OPEN" && (
+                <button
+                  type="button"
+                  disabled={busy !== null || now < campaign.submission_deadline_clock}
+                  onClick={() => runAction("Withdraw liquidity", () => withdrawLiquidity(campaign.campaign_id))}
+                  className="btn-ghost px-3 py-2 text-[12px] disabled:opacity-40"
+                  title={now < campaign.submission_deadline_clock ? "Only after the submission deadline" : "Reclaim the unfunded vault"}
+                >
+                  <CircleDollarSign size={14} /> Withdraw liquidity
+                </button>
+              )}
+              <a
+                href={`https://explorer-studio.genlayer.com/address/${campaign.brand}`}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-auto inline-flex items-center gap-1 text-[11px] text-white/35 transition hover:text-white/70"
+              >
+                brand on explorer <ArrowUpRight size={11} />
+              </a>
+            </div>
 
-      {needsBond && canSubmit && (
-        <p className="mt-2 text-[11px] text-pulse-amber/80">
-          This account needs at least {fmtCpt(campaign.required_creator_bond_atto)} CPT for the bond.
-          Use the wallet menu to claim the faucet.
-        </p>
-      )}
+            {campaign.state === "SUBMITTED" && !campaign.evaluated && (
+              <p className="mt-2 flex items-center gap-1.5 text-[11px] text-pulse-amber/80">
+                <ShieldCheck size={12} /> No settlement is possible until the consensus audit has run on this proof.
+              </p>
+            )}
+            {campaign.state === "EVALUATED" && !disputeClosed && (
+              <p className="mt-2 flex items-center gap-1.5 text-[11px] text-white/40">
+                <Clock4 size={12} /> dispute window closes {relativeClock(campaign.settlement_unlock_clock)}
+              </p>
+            )}
+
+            {needsBond && campaign.state === "OPEN" && (
+              <p className="mt-2 text-[11px] text-pulse-amber/80">
+                This account needs at least {fmtCpt(campaign.required_creator_bond_atto)} CPT for the bond. Use
+                the wallet menu to claim the faucet.
+              </p>
+            )}
+
+            {feedback.kind !== "idle" && (
+              <div
+                className={`mt-3 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 font-mono text-[10.5px] ${
+                  feedback.kind === "ok"
+                    ? "border-pulse-emerald/30 bg-pulse-emerald/[0.07] text-pulse-emerald/90"
+                    : "border-pulse-magenta/30 bg-pulse-magenta/[0.07] text-pulse-magenta/90"
+                }`}
+              >
+                <span className="break-words">{feedback.text}</span>
+                {feedback.hash && (
+                  <a href={explorerTx(feedback.hash)} target="_blank" rel="noreferrer" className="shrink-0 underline">
+                    {txShort(feedback.hash)}
+                  </a>
+                )}
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {campaign.audit_evidence && (
         <p className="mt-3 border-l-2 border-pulse-violet/40 pl-2.5 text-[11px] italic leading-relaxed text-white/40">

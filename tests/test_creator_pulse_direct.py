@@ -883,3 +883,306 @@ def test_vault_invariant_after_every_stage(ready, direct_vm, direct_charlie):
     snapshot = ready.check_vault_invariants()
     assert snapshot["ok"] is True
     assert snapshot["vault_custody_balance_atto"] == 0
+
+
+# ------------------------------------------------------------------ safe recovery from SUBMITTED
+
+# submitted_clock for the ready fixture is 2026-10-20T12:00:00Z. These ISO strings
+# sit inside or outside the two recovery windows defined in the contract.
+RECOVER_UNREACHABLE_MIN_SECONDS = 60 * 60
+RECOVER_UNREACHABLE_MAX_SECONDS = 60 * 60 * 24 * 7
+RECOVER_TIMEOUT_MIN_SECONDS = 60 * 60 * 24 * 7
+RECOVER_TIMEOUT_MAX_SECONDS = 60 * 60 * 24 * 90
+
+T_BEFORE_EVERYTHING = "2026-10-20T12:30:00Z"  # 30 minutes after submission
+T_UNREACHABLE_OPEN = "2026-10-20T13:00:01Z"  # just past the one hour floor
+T_UNREACHABLE_CLOSED = "2026-10-27T12:00:10Z"  # past the seven day ceiling
+T_TIMEOUT_STILL_SHUT = "2026-10-26T12:00:00Z"  # six days, below the timeout floor
+T_TIMEOUT_OPEN = "2026-10-27T12:00:10Z"  # past the seven day timeout floor
+T_TIMEOUT_CLOSED = "2027-01-25T12:00:00Z"  # past the ninety day timeout ceiling
+
+DEAD_PAGE = "404 not found"  # collapses below the twenty character readable bar
+
+
+def mock_unreachable(vm):
+    vm.mock_web(r".*proofs/.*\.html", {"status": 200, "body": DEAD_PAGE})
+
+
+def mock_readable(vm):
+    vm.mock_web(r".*proofs/.*\.html", {"status": 200, "body": GOOD_PAGE})
+
+
+def recover_unreachable(pulse, vm, at=T_UNREACHABLE_OPEN, sender=None, unreachable=True):
+    if unreachable:
+        mock_unreachable(vm)
+    else:
+        mock_readable(vm)
+    set_clock(vm, at)
+    if sender is not None:
+        vm.sender = sender
+    return pulse.recover_unreachable_deliverable(1)
+
+
+def curate_charlie(pulse, vm, direct_charlie, stake=40):
+    vm.sender = direct_charlie
+    return pulse.curate_deliverable(1, stake * CPT)
+
+
+def test_recovery_helper_is_single_source():
+    assert CONTRACT_SOURCE.count("def _execute_neutral_recovery") == 1
+
+
+def test_config_exposes_recovery_windows(pulse):
+    config = pulse.get_config()
+    assert config["recover_unreachable_min_seconds"] == RECOVER_UNREACHABLE_MIN_SECONDS
+    assert config["recover_unreachable_max_seconds"] == RECOVER_UNREACHABLE_MAX_SECONDS
+    assert config["recover_timeout_min_seconds"] == RECOVER_TIMEOUT_MIN_SECONDS
+    assert config["recover_timeout_max_seconds"] == RECOVER_TIMEOUT_MAX_SECONDS
+    assert "RECOVERED" in config["states"]
+
+
+def test_unreachable_principle_names_the_single_boolean():
+    principle = CONTRACT_SOURCE.split("UNREACHABLE_PRINCIPLE = (", 1)[1].split(")", 1)[0]
+    assert "proof_unreachable" in principle
+    assert "readable" in principle
+
+
+def test_unreachable_recovery_is_neutral_and_permissionless(ready, direct_vm, direct_charlie):
+    result = recover_unreachable(ready, direct_vm, sender=direct_charlie)
+    assert result["state"] == "RECOVERED"
+    assert result["reason"] == "EVIDENCE_UNREACHABLE"
+    assert result["brand_refunded_atto"] == 1400 * CPT
+    assert result["creator_bond_returned_atto"] == 100 * CPT
+    assert result["bonus_paid_atto"] == 0
+    assert result["bond_slashed_atto"] == 0
+
+
+def test_unreachable_recovery_credits_brand_and_creator(
+    ready, direct_vm, direct_alice, direct_bob
+):
+    before_brand = ready.get_token_balance(direct_alice.as_hex)
+    before_creator = ready.get_token_balance(direct_bob.as_hex)
+    recover_unreachable(ready, direct_vm)
+    assert ready.get_token_balance(direct_alice.as_hex) == before_brand + 1400 * CPT
+    assert ready.get_token_balance(direct_bob.as_hex) == before_creator + 100 * CPT
+
+
+def test_unreachable_recovery_reads_recovered_state(ready, direct_vm):
+    recover_unreachable(ready, direct_vm)
+    campaign = ready.get_campaign(1)
+    assert campaign["state"] == "RECOVERED"
+    assert campaign["recovered"] is True
+    assert campaign["recovered_clock"] == epoch_of(T_UNREACHABLE_OPEN)
+
+
+def test_readproof_page_blocks_unreachable_recovery(ready, direct_vm):
+    with direct_vm.expect_revert("Proof page is readable"):
+        recover_unreachable(ready, direct_vm, unreachable=False)
+
+
+def test_audit_still_available_after_readproof_page(ready, direct_vm):
+    with direct_vm.expect_revert("Proof page is readable"):
+        recover_unreachable(ready, direct_vm, unreachable=False)
+    run_audit(ready, direct_vm, 1)
+    assert ready.get_campaign(1)["state"] == "EVALUATED"
+
+
+def test_unreachable_recovery_before_floor_reverts(ready, direct_vm):
+    with direct_vm.expect_revert("window has not opened yet"):
+        recover_unreachable(ready, direct_vm, at=T_BEFORE_EVERYTHING)
+
+
+def test_unreachable_recovery_after_ceiling_reverts(ready, direct_vm):
+    with direct_vm.expect_revert("window has closed"):
+        recover_unreachable(ready, direct_vm, at=T_UNREACHABLE_CLOSED)
+
+
+def test_unreachable_recovery_rejects_non_submitted_state(
+    funded, direct_vm, direct_alice, clocks
+):
+    brand_campaign(funded, direct_vm, direct_alice, clocks)
+    mock_unreachable(direct_vm)
+    set_clock(direct_vm, T_UNREACHABLE_OPEN)
+    with direct_vm.expect_revert("only possible from SUBMITTED"):
+        funded.recover_unreachable_deliverable(1)
+
+
+def test_unreachable_recovery_twice_reverts(ready, direct_vm):
+    recover_unreachable(ready, direct_vm)
+    mock_unreachable(direct_vm)
+    with direct_vm.expect_revert("only possible from SUBMITTED"):
+        ready.recover_unreachable_deliverable(1)
+
+
+def test_hard_timeout_recovery_is_neutral(ready, direct_vm):
+    set_clock(direct_vm, T_TIMEOUT_OPEN)
+    result = ready.recover_hard_timeout(1)
+    assert result["state"] == "RECOVERED"
+    assert result["reason"] == "HARD_TIMEOUT"
+    assert result["brand_refunded_atto"] == 1400 * CPT
+    assert result["creator_bond_returned_atto"] == 100 * CPT
+
+
+def test_hard_timeout_before_floor_reverts(ready, direct_vm):
+    set_clock(direct_vm, T_TIMEOUT_STILL_SHUT)
+    with direct_vm.expect_revert("Hard timeout window has not opened yet"):
+        ready.recover_hard_timeout(1)
+
+
+def test_hard_timeout_after_ceiling_reverts(ready, direct_vm):
+    set_clock(direct_vm, T_TIMEOUT_CLOSED)
+    with direct_vm.expect_revert("Hard timeout window has closed"):
+        ready.recover_hard_timeout(1)
+
+
+def test_hard_timeout_rejects_evaluated_campaign(ready, direct_vm):
+    run_audit(ready, direct_vm, 1)
+    with direct_vm.expect_revert("only possible from SUBMITTED"):
+        ready.recover_hard_timeout(1)
+
+
+def test_hard_timeout_is_permissionless(ready, direct_vm, direct_charlie):
+    set_clock(direct_vm, T_TIMEOUT_OPEN)
+    direct_vm.sender = direct_charlie
+    result = ready.recover_hard_timeout(1)
+    assert result["state"] == "RECOVERED"
+
+
+def test_hard_timeout_twice_reverts(ready, direct_vm):
+    set_clock(direct_vm, T_TIMEOUT_OPEN)
+    ready.recover_hard_timeout(1)
+    with direct_vm.expect_revert("only possible from SUBMITTED"):
+        ready.recover_hard_timeout(1)
+
+
+def test_recovery_conserves_full_escrow(ready, direct_vm, direct_charlie):
+    curate_charlie(ready, direct_vm, direct_charlie, stake=40)
+    result = recover_unreachable(ready, direct_vm)
+    released = result["escrow_released_atto"]
+    refundable = result["curation_still_refundable_atto"]
+    assert released + refundable == (1000 + 400 + 100 + 40) * CPT
+    snapshot = ready.check_vault_invariants()
+    assert snapshot["ok"] is True
+    assert snapshot["campaign_escrow_atto"] == 0
+    assert snapshot["curation_escrow_atto"] == 40 * CPT
+
+
+def test_curator_pull_refund_after_recovery(ready, direct_vm, direct_charlie):
+    curate_charlie(ready, direct_vm, direct_charlie, stake=40)
+    recover_unreachable(ready, direct_vm)
+    before = ready.get_token_balance(direct_charlie.as_hex)
+    refund = ready.claim_curation_refund(1)
+    assert refund["refunded_atto"] == 40 * CPT
+    assert ready.get_token_balance(direct_charlie.as_hex) == before + 40 * CPT
+    snapshot = ready.check_vault_invariants()
+    assert snapshot["ok"] is True
+    assert snapshot["curation_escrow_atto"] == 0
+    assert snapshot["vault_custody_balance_atto"] == 0
+
+
+def test_curator_refund_is_single_shot_after_recovery(ready, direct_vm, direct_charlie):
+    curate_charlie(ready, direct_vm, direct_charlie, stake=40)
+    recover_unreachable(ready, direct_vm)
+    ready.claim_curation_refund(1)
+    with direct_vm.expect_revert("No curation stake"):
+        ready.claim_curation_refund(1)
+    assert ready.check_vault_invariants()["ok"] is True
+
+
+def test_recovery_then_audit_reverts(ready, direct_vm):
+    recover_unreachable(ready, direct_vm)
+    with direct_vm.expect_revert("not awaiting an audit"):
+        ready.verify_campaign_deliverable_live(1)
+
+
+def test_recovery_then_curate_reverts(ready, direct_vm, direct_charlie):
+    recover_unreachable(ready, direct_vm)
+    direct_vm.sender = direct_charlie
+    with direct_vm.expect_revert("funds were recovered"):
+        ready.curate_deliverable(1, 20 * CPT)
+
+
+def test_recovery_then_settlement_reverts(ready, direct_vm):
+    recover_unreachable(ready, direct_vm)
+    with direct_vm.expect_revert("funds were recovered"):
+        ready.claim_campaign_settlement(1)
+
+
+def test_recovery_then_brand_withdraw_reverts(ready, direct_vm, direct_alice):
+    recover_unreachable(ready, direct_vm)
+    direct_vm.sender = direct_alice
+    set_clock(direct_vm, "2026-10-22T12:00:01Z")
+    with direct_vm.expect_revert("funds were recovered"):
+        ready.withdraw_campaign_liquidity(1)
+
+
+def test_audit_then_recovery_reverts(ready, direct_vm):
+    run_audit(ready, direct_vm, 1)
+    mock_unreachable(direct_vm)
+    with direct_vm.expect_revert("only possible from SUBMITTED"):
+        ready.recover_unreachable_deliverable(1)
+
+
+def test_settlement_then_recovery_reverts(ready, direct_vm):
+    run_audit(ready, direct_vm, 1)
+    settle(ready, direct_vm)
+    mock_unreachable(direct_vm)
+    set_clock(direct_vm, T_UNREACHABLE_OPEN)
+    with direct_vm.expect_revert("only possible from SUBMITTED"):
+        ready.recover_unreachable_deliverable(1)
+
+
+def test_cancelled_campaign_cannot_recover(funded, direct_vm, direct_alice, clocks):
+    brand_campaign(funded, direct_vm, direct_alice, clocks)
+    set_clock(direct_vm, "2026-10-22T12:00:01Z")
+    direct_vm.sender = direct_alice
+    funded.withdraw_campaign_liquidity(1)
+    set_clock(direct_vm, T_TIMEOUT_OPEN)
+    with direct_vm.expect_revert("only possible from SUBMITTED"):
+        funded.recover_hard_timeout(1)
+
+
+def test_brand_still_cannot_claw_back_during_submitted(ready, direct_vm, direct_alice):
+    direct_vm.sender = direct_alice
+    with direct_vm.expect_revert("PAPITO_LIABILITY_LOCK deliverable is awaiting"):
+        ready.withdraw_campaign_liquidity(1)
+
+
+def test_hard_timeout_before_window_is_not_a_brand_escape(ready, direct_vm, direct_alice):
+    direct_vm.sender = direct_alice
+    set_clock(direct_vm, T_TIMEOUT_STILL_SHUT)
+    with direct_vm.expect_revert("Hard timeout window has not opened yet"):
+        ready.recover_hard_timeout(1)
+
+
+def test_recovery_keeps_a_separate_evaluated_campaign_on_the_feed(
+    funded, direct_vm, direct_alice, direct_bob, direct_charlie, clocks
+):
+    # Campaign 1 gets evaluated and curated, campaign 2 gets recovered. The recovered
+    # campaign must never appear on the feed and must not disturb the ranking.
+    dead_url = "https://example.com/dead-evidence/campaign.html"
+    direct_vm.mock_web(r".*example\.com.*", {"status": 200, "body": DEAD_PAGE})
+    brand_campaign(funded, direct_vm, direct_alice, clocks)
+    brand_campaign(funded, direct_vm, direct_alice, clocks, title="Second drop")
+    submit_deliverable(funded, direct_vm, direct_bob, 1)
+    submit_deliverable(funded, direct_vm, direct_bob, 2, url=dead_url)
+    run_audit(funded, direct_vm, 1)
+    direct_vm.sender = direct_charlie
+    funded.curate_deliverable(1, 40 * CPT)
+    set_clock(direct_vm, T_UNREACHABLE_OPEN)
+    funded.recover_unreachable_deliverable(2)
+    feed_ids = [entry["campaign_id"] for entry in funded.get_feed(5)["entries"]]
+    assert 2 not in feed_ids
+    assert funded.get_stats()["top_curated_campaign_id"] == 1
+    assert funded.check_vault_invariants()["ok"] is True
+
+
+def test_vault_invariant_holds_after_every_recovery_stage(ready, direct_vm, direct_charlie):
+    curate_charlie(ready, direct_vm, direct_charlie, stake=40)
+    assert ready.check_vault_invariants()["ok"] is True
+    recover_unreachable(ready, direct_vm)
+    assert ready.check_vault_invariants()["ok"] is True
+    ready.claim_curation_refund(1)
+    snapshot = ready.check_vault_invariants()
+    assert snapshot["ok"] is True
+    assert snapshot["vault_custody_balance_atto"] == 0

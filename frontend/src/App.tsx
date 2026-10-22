@@ -3,6 +3,7 @@ import { AlertTriangle, Github, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Header } from "./components/Header";
 import { Hero } from "./components/Hero";
 import { Simulator } from "./components/Simulator";
+import { OperatorConsole } from "./components/OperatorConsole";
 import { CampaignBoard } from "./components/CampaignBoard";
 import { FeedRail } from "./components/FeedRail";
 import { ConsensusSection } from "./components/ConsensusSection";
@@ -110,6 +111,7 @@ export default function App() {
           <div className="hairline" />
         </div>
         <Simulator api={api} />
+        <OperatorConsole api={api} />
         <CampaignBoard api={api} onInspect={setInspectId} />
         <FeedRail api={api} />
         <ConsensusSection api={api} onInspect={setInspectId} />

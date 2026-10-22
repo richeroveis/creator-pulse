@@ -38,6 +38,8 @@ export interface Campaign {
   submitted_clock: number;
   evaluated_clock: number;
   settlement_unlock_clock: number;
+  recovered: boolean;
+  recovered_clock: number;
 }
 
 export interface FeedEntry {
@@ -100,6 +102,7 @@ export const STATE_TONE: Record<string, string> = {
   EVALUATED: "text-pulse-violet",
   SETTLED: "text-pulse-emerald",
   CANCELLED: "text-white/40",
+  RECOVERED: "text-pulse-ice",
 };
 
 /**

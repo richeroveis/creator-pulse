@@ -63,6 +63,7 @@ export function Header({ api }: { api: PulseApi }) {
         <nav className="hidden items-center gap-1 text-sm text-white/60 lg:flex">
           {[
             ["#simulator", "What-If Studio"],
+            ["#console", "Console"],
             ["#campaigns", "Campaigns"],
             ["#feed", "Curated Feed"],
             ["#guardlab", "Guard Lab"],
