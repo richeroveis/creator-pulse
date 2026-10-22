@@ -889,13 +889,13 @@ def test_vault_invariant_after_every_stage(ready, direct_vm, direct_charlie):
 
 # submitted_clock for the ready fixture is 2026-10-20T12:00:00Z. These ISO strings
 # sit inside or outside the two recovery windows defined in the contract.
-RECOVER_UNREACHABLE_MIN_SECONDS = 60 * 60
+RECOVER_UNREACHABLE_MIN_SECONDS = 300
 RECOVER_UNREACHABLE_MAX_SECONDS = 60 * 60 * 24 * 7
 RECOVER_TIMEOUT_MIN_SECONDS = 60 * 60 * 24 * 7
 RECOVER_TIMEOUT_MAX_SECONDS = 60 * 60 * 24 * 90
 
-T_BEFORE_EVERYTHING = "2026-10-20T12:30:00Z"  # 30 minutes after submission
-T_UNREACHABLE_OPEN = "2026-10-20T13:00:01Z"  # just past the one hour floor
+T_BEFORE_EVERYTHING = "2026-10-20T12:02:00Z"  # 2 minutes, below the unreachable floor
+T_UNREACHABLE_OPEN = "2026-10-20T12:06:00Z"  # 6 minutes, inside the unreachable window
 T_UNREACHABLE_CLOSED = "2026-10-27T12:00:10Z"  # past the seven day ceiling
 T_TIMEOUT_STILL_SHUT = "2026-10-26T12:00:00Z"  # six days, below the timeout floor
 T_TIMEOUT_OPEN = "2026-10-27T12:00:10Z"  # past the seven day timeout floor
@@ -1148,7 +1148,7 @@ def test_brand_still_cannot_claw_back_during_submitted(ready, direct_vm, direct_
         ready.withdraw_campaign_liquidity(1)
 
 
-def test_hard_timeout_before_window_is_not_a_brand_escape(ready, direct_vm, direct_alice):
+def test_recovery_hard_timeout_before_floor_is_not_an_escape(ready, direct_vm, direct_alice):
     direct_vm.sender = direct_alice
     set_clock(direct_vm, T_TIMEOUT_STILL_SHUT)
     with direct_vm.expect_revert("Hard timeout window has not opened yet"):

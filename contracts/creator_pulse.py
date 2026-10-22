@@ -47,8 +47,11 @@ MAX_CAMPAIGNS_PER_PAGE: int = 24
 # Safe recovery from SUBMITTED when an audit can never complete. Both windows are
 # measured from submitted_clock and are validated with a floor and a ceiling.
 # Path a (evidence unreachable) needs validators to agree the page cannot be read.
-# Path b (hard timeout) needs only that the campaign was never evaluated.
-RECOVER_UNREACHABLE_MIN_SECONDS: int = 60 * 60
+# The audit is permissionless and can start the instant a deliverable is submitted,
+# so the floor only prevents a recovery from racing a brand new submission; the real
+# anti escape protection is that path a requires unanimous agreement the page is dead.
+# Path b (hard timeout) is a much longer backstop for when validators cannot agree.
+RECOVER_UNREACHABLE_MIN_SECONDS: int = 300
 RECOVER_UNREACHABLE_MAX_SECONDS: int = 60 * 60 * 24 * 7
 RECOVER_TIMEOUT_MIN_SECONDS: int = 60 * 60 * 24 * 7
 RECOVER_TIMEOUT_MAX_SECONDS: int = 60 * 60 * 24 * 90

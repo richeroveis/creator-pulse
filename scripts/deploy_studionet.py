@@ -106,6 +106,27 @@ CURATIONS = [
     ("curator_ada", 3, 30),
 ]
 
+# A fourth campaign whose proof page is genuinely unreadable, used to prove the
+# neutral recovery path live. dead.html renders to fewer than twenty characters, so
+# validators deterministically agree proof_unreachable is true once the floor passes.
+RECOVERY_CAMPAIGN = {
+    "brand": "brand_nova",
+    "creator": "creator_mira",
+    "curator": "curator_ada",
+    "title": "Recovery dead evidence probe",
+    "tag": "#RecoveryProbe",
+    "spec": (
+        "Publish any public proof page for this campaign. It exists to exercise the neutral "
+        "recovery path when the deliverable page cannot be read by the validators."
+    ),
+    "base": 200,
+    "viral": 100,
+    "bond": 50,
+    "proof": f"{PROOF_BASE}/dead.html",
+}
+RECOVERY_STAKE = 30
+RECOVER_UNREACHABLE_MIN_SECONDS = 300
+
 
 class Runner:
     def __init__(self, reuse: bool = True, fresh: bool = False) -> None:
@@ -437,6 +458,151 @@ class Runner:
         }
         return {"dashboard": dashboard, "invariants": invariants, "balances": balances}
 
+    # ----------------------------------------------------------- recovery scenario
+
+    def create_recovery_campaign(self) -> None:
+        campaign = RECOVERY_CAMPAIGN
+        deadline = int(time.time()) + 86400
+
+        def already() -> bool:
+            return int(self.view("get_campaign_count")) >= 4
+
+        self.send(
+            "create:4",
+            campaign["brand"],
+            "create_campaign",
+            [
+                campaign["title"],
+                campaign["tag"],
+                campaign["spec"],
+                campaign["base"] * CPT,
+                campaign["viral"] * CPT,
+                campaign["bond"] * CPT,
+                deadline,
+            ],
+            skip_if=already,
+            note="funds the vault of the campaign that will be recovered",
+        )
+
+    def submit_recovery_deliverable(self) -> None:
+        campaign = RECOVERY_CAMPAIGN
+
+        def submitted() -> bool:
+            return str(self.view("get_campaign", [4]).get("state")) != "OPEN"
+
+        self.send(
+            "submit:4",
+            campaign["creator"],
+            "accept_and_submit_deliverable",
+            [4, campaign["proof"]],
+            skip_if=submitted,
+            note="locks the bond and submits an unreadable proof page",
+        )
+
+    def curate_recovery(self) -> None:
+        campaign = RECOVERY_CAMPAIGN
+        curator = campaign["curator"]
+
+        def already() -> bool:
+            current = int(
+                self.view("get_curator_stake", [4, self.actor(curator).address], actor=curator)
+            )
+            return current >= RECOVERY_STAKE * CPT
+
+        self.send(
+            "curate:recovery",
+            curator,
+            "curate_deliverable",
+            [4, RECOVERY_STAKE * CPT],
+            skip_if=already,
+            note="community stake behind the dead evidence deliverable",
+        )
+
+    def recovery_guards_early(self) -> None:
+        self.send(
+            "guard:recover-before-window",
+            "brand_pulse",
+            "recover_unreachable_deliverable",
+            [4],
+            expected="Unreachable recovery window has not opened",
+            note="neutral recovery is blocked before the minimum audit window",
+        )
+        self.send(
+            "guard:recover-hard-timeout-early",
+            "brand_pulse",
+            "recover_hard_timeout",
+            [4],
+            expected="Hard timeout window has not opened yet",
+            note="hard timeout recovery is blocked long before the seven day floor",
+        )
+
+    def recover_dead_evidence(self) -> None:
+        campaign = RECOVERY_CAMPAIGN
+        snapshot = self.view("get_campaign", [4])
+        if str(snapshot.get("state")) != "SUBMITTED":
+            print(f"[skip] recover:4 campaign 4 is already {snapshot.get('state')}", flush=True)
+            return
+        unlock = int(snapshot["submitted_clock"]) + RECOVER_UNREACHABLE_MIN_SECONDS
+        wait_seconds = max(0, unlock - int(time.time()) + 5)
+        if wait_seconds:
+            print(f"[wait] unreachable recovery window opens in {wait_seconds}s", flush=True)
+            time.sleep(wait_seconds)
+        self.send(
+            "recover:4",
+            "deployer",
+            "recover_unreachable_deliverable",
+            [4],
+            timeout=1800,
+            note="validators fetch dead.html, agree proof_unreachable, neutral recovery runs",
+        )
+        recovered = self.view("get_campaign", [4])
+        if recovered.get("state") != "RECOVERED":
+            raise RuntimeError(f"campaign 4 recovery did not reach RECOVERED: {recovered.get('state')}")
+        print(
+            f"     recovered: brand refund {int(recovered['brand_refund_atto']) // CPT} CPT "
+            f"state {recovered['state']}",
+            flush=True,
+        )
+        self.send(
+            "guard:audit-after-recovery",
+            "deployer",
+            "verify_campaign_deliverable_live",
+            [4],
+            expected="not awaiting an audit",
+            note="a recovered campaign can never be audited",
+        )
+        self.send(
+            "guard:curate-after-recovery",
+            "curator_lin",
+            "curate_deliverable",
+            [4, 5 * CPT],
+            expected="funds were recovered",
+            note="a recovered campaign can never be curated",
+        )
+        self.send(
+            "guard:withdraw-after-recovery",
+            campaign["brand"],
+            "withdraw_campaign_liquidity",
+            [4],
+            expected="funds were recovered",
+            note="the brand can never reclaim a recovered vault",
+        )
+        self.send(
+            "guard:recover-twice",
+            campaign["brand"],
+            "recover_unreachable_deliverable",
+            [4],
+            expected="only possible from SUBMITTED",
+            note="recovery is not repeatable",
+        )
+        self.send(
+            "refund:recovery-curator",
+            campaign["curator"],
+            "claim_curation_refund",
+            [4],
+            note="curator pulls the stake back after the neutral recovery",
+        )
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -459,10 +625,15 @@ def main() -> None:
     runner.fund_actors()
     print("==", "create campaigns", flush=True)
     runner.create_campaigns()
+    runner.create_recovery_campaign()
     print("==", "submit deliverables", flush=True)
     runner.submit_deliverables()
+    runner.submit_recovery_deliverable()
+    print("==", "guard probe: recovery blocked before its window", flush=True)
+    runner.recovery_guards_early()
     print("==", "curate", flush=True)
     runner.curate()
+    runner.curate_recovery()
     print("==", "guard probe: clawback while awaiting audit", flush=True)
     runner.send(
         "guard:clawback-submitted",
@@ -503,6 +674,8 @@ def main() -> None:
             expected="Insufficient CPT balance",
             note="balance floor holds under an overdraw attempt",
         )
+    print("==", "neutral recovery from dead evidence", flush=True)
+    runner.recover_dead_evidence()
     print("==", "collect final state", flush=True)
     final = runner.collect()
     contract = runner.state["contract"]
