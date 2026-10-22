@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +19,20 @@ ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "frontend" / "dist"
 STAGE = ROOT / ".pages-build"
 REPO = "https://github.com/richeroveis/creator-pulse.git"
+
+
+def force_rmtree(path: Path) -> None:
+    """Remove a directory tree on Windows where git stores read-only pack files.
+
+    shutil.rmtree raises PermissionError on those, so clear the read-only bit on
+    every entry before retrying the unlink.
+    """
+
+    def clear(func, target, _exc):
+        os.chmod(target, stat.S_IWRITE)
+        func(target)
+
+    shutil.rmtree(path, onerror=clear)
 
 
 def read_token() -> str:
@@ -58,7 +73,7 @@ def main() -> None:
     env["GH_TOKEN"] = token
 
     if STAGE.exists():
-        shutil.rmtree(STAGE)
+        force_rmtree(STAGE)
     shutil.copytree(DIST, STAGE)
     (STAGE / ".nojekyll").write_text("", encoding="utf-8")
 

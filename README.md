@@ -10,13 +10,15 @@ exactly on one settlement band. The vault then pays out through a single determi
 
 No owner key can score a campaign. No brand can unilaterally approve a payout, slash a creator, or
 claw back the viral bonus pool while an audit is pending. The only path from a submitted deliverable
-to money moving is live validator consensus.
+to a payout is live validator consensus. The only other exit from a submitted campaign is a neutral
+recovery that returns every token to the party who already owns it, and it can never pay a bonus or
+slash a bond, so a brand cannot use it to escape an audit it is about to lose.
 
 - Live app: https://richeroveis.github.io/creator-pulse/
 - Repository: https://github.com/richeroveis/creator-pulse
 - Contract: `contracts/creator_pulse.py`
 - Evidence: `evidence/studionet_deployment.json`
-- Tag: `studionet-v1`
+- Tag: `studionet-v2`
 
 ---
 
@@ -77,6 +79,24 @@ gate and the simulator preview view all call it. `_sync_top_curated_campaign` is
 truth for the curated ranking, and settlement re-syncs it so a settled campaign can never stay on the
 board. Settlement requires `evaluated == True` and a closed dispute window.
 
+### 5. A neutral escape when an audit can never complete
+
+A submitted campaign can only strand funds if its proof page becomes permanently unreadable. Two
+permissionless recovery paths handle that, both decided by one shared deterministic helper
+`_execute_neutral_recovery` that is neutral by construction (creator gets the bond back, brand gets
+base plus viral pool back, curators pull their stakes, no bonus, no slash):
+
+1. `recover_unreachable_deliverable` runs `gl.eq_principle.prompt_comparative` on a fetch probe. All
+   validators must agree on exactly one boolean, `proof_unreachable`. If the page renders readable
+   text the call reverts and the audit remains the only way forward, so this can never be used to
+   dodge a winnable audit. It is available only inside a floored window since submission.
+2. `recover_hard_timeout` is a much longer backstop for the case where validators cannot agree on
+   the fetch at all. It requires that the campaign was never evaluated.
+
+Both move every campaign into the new terminal status `RECOVERED`, after which the audit, curation,
+settlement and brand reclaim all revert. Curator refunds stay pull based through
+`claim_curation_refund`, so one unreachable curator address can never block a recovery.
+
 ---
 
 ## Settlement bands
@@ -110,8 +130,10 @@ tag forces anchor 0 regardless of what the model said.
 | `curate_deliverable(id, stake)` | write | Stake CPT behind a submitted deliverable |
 | `verify_campaign_deliverable_live(id)` | write | Consensus audit, band and split |
 | `claim_campaign_settlement(id)` | write | Release the band after the dispute window |
-| `claim_curation_refund(id)` | write | Curator pull refund after settlement |
+| `claim_curation_refund(id)` | write | Curator pull refund after settlement or recovery |
 | `withdraw_campaign_liquidity(id)` | write | Brand reclaim, blocked by the PAPITO lock |
+| `recover_unreachable_deliverable(id)` | write | Neutral recovery when validators agree the page is dead |
+| `recover_hard_timeout(id)` | write | Neutral recovery after the long hard timeout window |
 | `get_dashboard(limit)` | view | Stats, campaigns, feed and config in one call |
 | `get_campaign(id)` | view | Full campaign snapshot |
 | `get_feed(limit)` | view | Curated ranking of evaluated campaigns |
@@ -128,8 +150,10 @@ Other views: `get_campaign_count`, `get_token_balance`, `get_my_balance`, `get_c
 
 - `vault_custody_balance == sum(active campaign escrow) + sum(unrefunded curation stakes)`
 - `creator_payout + brand_refund == base_reward + viral_bonus_pool + required_creator_bond`
-- A settled or cancelled campaign contributes zero escrow
-- A campaign cannot be audited twice, settled twice, or curated after settlement
+- A settled, cancelled or recovered campaign contributes zero escrow; its curation stake is counted
+  as unrefunded until each curator pulls it, then it contributes zero there too
+- A campaign cannot be audited twice, settled twice, recovered twice, or curated after settlement or
+  recovery
 - A brand cannot submit its own campaign, and neither brand nor creator can curate it
 - The faucet is capped per account, rewards, bonds and curation stakes all have floors and ceilings, and
   every deadline has a minimum and maximum window
@@ -144,12 +168,18 @@ Other views: `get_campaign_count`, `get_token_balance`, `get_my_balance`, `get_c
 | `SUBMITTED` or `EVALUATED` | `curate_deliverable` before settlement | any account except brand and creator | unchanged | stake `S` into custody |
 | `EVALUATED` | `claim_campaign_settlement` after the dispute unlock | anyone (permissionless keeper) | `SETTLED` | `creator_payout + brand_refund` released |
 | `SETTLED` | `claim_curation_refund` | the curator that staked | `SETTLED` | `S` returned to that curator |
+| `SUBMITTED` | `recover_unreachable_deliverable` when validators agree the page is dead | anyone (permissionless keeper) | `RECOVERED` | neutral return, no bonus, no slash |
+| `SUBMITTED` | `recover_hard_timeout` after the long window, never evaluated | anyone (permissionless keeper) | `RECOVERED` | neutral return, no bonus, no slash |
+| `RECOVERED` | `claim_curation_refund` | the curator that staked | `RECOVERED` | `S` returned to that curator |
 
 No state can strand funds. An abandoned `OPEN` campaign returns to the brand after the deadline, a
-`SUBMITTED` campaign can be audited by anyone, and an `EVALUATED` campaign can be claimed by anyone once
-the dispute window closes. Settlement and cancellation are mutually exclusive by status and by strictly
-complementary timestamp comparisons: submissions require `now < deadline`, reclaim requires
-`now >= deadline`, and claims require `now >= unlock`.
+`SUBMITTED` campaign can be audited by anyone, an `EVALUATED` campaign can be claimed by anyone once
+the dispute window closes, and a `SUBMITTED` campaign whose proof page can never be read falls back
+to one of the two neutral recovery paths. Once `RECOVERED`, every curator still pulls their own
+stake back. Settlement and cancellation are mutually exclusive by status and by strictly complementary
+timestamp comparisons: submissions require `now < deadline`, reclaim requires `now >= deadline`, and
+claims require `now >= unlock`. Recovery is only reachable from `SUBMITTED`, so a brand can never use
+it to escape an audit that is about to pay a creator.
 
 ---
 
@@ -181,9 +211,11 @@ Brand wallet                       Creator wallet                  Curator walle
                     studionet validators (5 per transaction)
 ```
 
-The frontend is a static React bundle. It never computes a settlement for money. The What-If Studio
-mirrors the helper for illustration only, and its "Verify against chain" button reads
-`get_campaign_band_preview` from the deployed contract to prove the mirror agrees.
+The frontend is a React bundle that drives the real contract. It reads state with `get_dashboard`, and
+it sends real state changing transactions through genlayer-js `writeContract` for every lifecycle and
+recovery method, then polls each transaction to `FINALIZED`. It never computes a settlement locally to
+move funds. The What-If Studio mirrors the helper for illustration only, and its "Verify against chain"
+button reads `get_campaign_band_preview` from the deployed contract to prove the mirror agrees.
 
 ---
 
@@ -192,13 +224,14 @@ mirrors the helper for illustration only, and its "Verify against chain" button 
 ```text
 contracts/creator_pulse.py          intelligent contract, pinned runner on line 1
 tests/conftest.py                   Windows unlink workaround plus fixtures
-tests/test_creator_pulse_direct.py  106 direct tests, all passing
+tests/test_creator_pulse_direct.py  138 direct tests, all passing
 scripts/deploy_studionet.py         idempotent live deployment and seeding
 scripts/verify_explorer.py          re-read every transaction through the explorer API
 scripts/record_provenance.py        pin the commit that contains the deployed bytes
 scripts/verify_identity.py          4-way sha256, address, provenance and explorer check
 scripts/write_evidence_md.py        render docs/evidence.md from the evidence JSON
 scripts/ci_seed_genvm.py            pin the direct test runner tarball used by CI
+scripts/check_frontend_bindings.py  fail if a contract write method has no frontend binding
 tools/make_logo.py                  procedural 512x512 logo generator
 tools/generate_soundtrack.py        synthesized demo soundtrack
 tools/make_demo_video.py            subtitled audio backed demo video renderer
@@ -254,15 +287,15 @@ refuses to write evidence unless the deployed contract file is committed.
 | Field | Value |
 | --- | --- |
 | Network | studionet, chain id 61999 |
-| Contract | [`0x031B8ed9391b81fd89107B231F9573bD699e3F38`](https://explorer-studio.genlayer.com/address/0x031B8ed9391b81fd89107B231F9573bD699e3F38) |
-| Deploy transaction | [`0xa0d3b9ddfb9ae63a9c102f1b32890f67b48925c1e97c21ba4ad941c20280abd4`](https://explorer-studio.genlayer.com/tx/0xa0d3b9ddfb9ae63a9c102f1b32890f67b48925c1e97c21ba4ad941c20280abd4) |
-| Source commit | `422964bf5e262e6485f6e2084bb750d2a799c46c` (tag `studionet-v1`) |
-| Contract file sha256 | `66fab11723efa7bc3603a8537c2f98003649fe9339b2397829146539df1c4d65` |
+| Contract | [`0x6768EAdcFBF13aDEE460Bfd228f6653f3e013016`](https://explorer-studio.genlayer.com/address/0x6768EAdcFBF13aDEE460Bfd228f6653f3e013016) |
+| Deploy transaction | [`0x48e6029a946a6b87b33c9e5a90423c8e277d7a6cd303edfc66f1ee91afe4b065`](https://explorer-studio.genlayer.com/tx/0x48e6029a946a6b87b33c9e5a90423c8e277d7a6cd303edfc66f1ee91afe4b065) |
+| Source commit | `a77042e409dacf6e205839a31c610e3d48a35fe5` (tag `untagged`) |
+| Contract file sha256 | `ed4fcc08c72e4926329f9efc6c3a16ac7d0b6d57ef04abd03136d1d6ea0381aa` |
 | Runner | `# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }` |
 
 The source commit is resolved by hashing the contract blob at every commit that touched
 `contracts/creator_pulse.py` and keeping the newest one whose digest equals the deployed file, so
-`git show 422964bf5e262e6485f6e2084bb750d2a799c46c:contracts/creator_pulse.py` reproduces the row above.
+`git show a77042e409dacf6e205839a31c610e3d48a35fe5:contracts/creator_pulse.py` reproduces the row above.
 
 Four independent places carry the same code hash: `contracts/creator_pulse.py` on disk,
 `evidence/studionet_deployment.json`, `frontend/src/config.ts` and this README. Run
@@ -278,42 +311,55 @@ the scenario ran, then re-read independently through the explorer JSON API by
 `python scripts/verify_explorer.py`, which also checks the validator votes and the exact revert
 payload of each guard probe. Guard probes are expected to finish with `FINISHED_WITH_ERROR`.
 
-Explorer re-verification: 28/28 rows PASS, checked 2026-10-20T13:43:55Z.
+Explorer re-verification: 39/39 rows PASS, checked 2026-10-22T17:24:01Z.
 
 | Step | Transaction | Status | Result | Execution | Votes |
 | --- | --- | --- | --- | --- | --- |
-| `faucet:brand_nova` | [0xcfa3dbded8](https://explorer-studio.genlayer.com/tx/0xcfa3dbded8b194b7421e1f1172a0c7abd563fd7f90ba1b5a0d1730a273bc5b1c) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `faucet:brand_pulse` | [0x51f60c5389](https://explorer-studio.genlayer.com/tx/0x51f60c5389b5451ed5bdbacfb5da529da87b6811c48e0d0286a8490492c805a2) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
-| `faucet:brand_aurora` | [0xb9d2b69d69](https://explorer-studio.genlayer.com/tx/0xb9d2b69d694cd71d44a1bc014fa87e8c2aeabc695a03c35165342d02dbd389cc) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `faucet:creator_mira` | [0x6ef665b5be](https://explorer-studio.genlayer.com/tx/0x6ef665b5be71a4d5672506d6251364e08c52ae384fd3486abf012b329d7c489c) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
-| `faucet:creator_jonas` | [0x47b4350953](https://explorer-studio.genlayer.com/tx/0x47b435095386dc53c3f43567398e796bdf5d6fdb59107859b35f291c9afa7a07) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `faucet:curator_lin` | [0xf656aec2f2](https://explorer-studio.genlayer.com/tx/0xf656aec2f27d39fb9ecda7c5fa6728b251f3e158676ae8afd0416941c0b73628) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
-| `faucet:curator_ada` | [0xc1dd643806](https://explorer-studio.genlayer.com/tx/0xc1dd643806746882cd338616708f81332dd374b280fad5f2b8eec5d2b116a052) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
-| `create:1` | [0x5b1f82cee8](https://explorer-studio.genlayer.com/tx/0x5b1f82cee8746668deb44e98defdc19f5c18b2616612eb67e613696c1654349b) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
-| `create:2` | [0x67452884a7](https://explorer-studio.genlayer.com/tx/0x67452884a77efb2c997d7b82b3ba4f5c9546f8b09831f4fb0901bbde8c1e7fbf) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
-| `create:3` | [0xdd7ed0be9c](https://explorer-studio.genlayer.com/tx/0xdd7ed0be9c097a4b3bd94f568d6b6181d6f88f116a91d259bf1d6fe9d5d425ab) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
-| `submit:1` | [0x3f13ba9dfa](https://explorer-studio.genlayer.com/tx/0x3f13ba9dfa79da65a28b95ff72ff3c8043ae75cad46b60b73cda9fd346533acd) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `submit:2` | [0x593daa3e1f](https://explorer-studio.genlayer.com/tx/0x593daa3e1f84ff47ba62770a5cffbf9abb12b15f3c5f574722bfacb04972c534) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `submit:3` | [0x7036384849](https://explorer-studio.genlayer.com/tx/0x7036384849186144ee1684b1423e9df6ac9f4f58d155d0e9ab2cf71509a337a8) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
-| `curate:1` | [0x36f7ea8903](https://explorer-studio.genlayer.com/tx/0x36f7ea8903c5ef3f51eeec402822e7d91bac0ff645f0792b28ec9c22ce3cccc0) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `curate:2` | [0x5e8c594497](https://explorer-studio.genlayer.com/tx/0x5e8c594497e2010ff3cf3849832c4cb665f77fea9a8db6a4ec006faac1060d53) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `curate:3` | [0xd82fe1d620](https://explorer-studio.genlayer.com/tx/0xd82fe1d620bafa4246ad2342b71e8222a83905a829ec8255f9a36e9af1c55402) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `curate:4` | [0x89f40b9334](https://explorer-studio.genlayer.com/tx/0x89f40b9334cdb312090a279c3646fbf7e8b37acac37c9b938ab1876590b839c1) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `guard:clawback-submitted` | [0x150977f14d](https://explorer-studio.genlayer.com/tx/0x150977f14dabc3b8ff0b95cc0bdb1fdb107c49e692922b7382f6f854123353d3) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
-| `audit:1` | [0x9b1bccaa4a](https://explorer-studio.genlayer.com/tx/0x9b1bccaa4aacface3eb63752c21578cd1f17d016b2d4b792c1f71567890c7e9c) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `audit:2` | [0x065ade2b16](https://explorer-studio.genlayer.com/tx/0x065ade2b16dc4c76fcb318ec7990b9cc4ea6aa4ad5f5db3b5a74a0725adee60a) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 1 disagree |
-| `audit:3` | [0x1806400aa3](https://explorer-studio.genlayer.com/tx/0x1806400aa312fad513f80c6055cf65029e06566e0e0b50bb8022ee0ef8ec6714) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `guard:clawback-evaluated` | [0x0e94e36001](https://explorer-studio.genlayer.com/tx/0x0e94e360017efb384f58cd32732d99249a796c75c21baaa2e07b09cf11635078) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
-| `settle:1` | [0x858d32683e](https://explorer-studio.genlayer.com/tx/0x858d32683e99d8516e5ca569f7a4a7d007e97c134f28ca66d7a373a5a5ccf647) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `settle:3` | [0xd3bbc7dafd](https://explorer-studio.genlayer.com/tx/0xd3bbc7dafd1f80bff518d185e0343d2f297794290367873a186537727668607f) | FINALIZED | MAJORITY_AGREE | SUCCESS | 5 agree / 0 disagree |
-| `refund:curation-1` | [0xad9be373ef](https://explorer-studio.genlayer.com/tx/0xad9be373efca9c11338ffed9b3540dbcbc03f52e5735c9116170f8200669666f) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
-| `guard:curate-after-settlement` | [0x64d911c685](https://explorer-studio.genlayer.com/tx/0x64d911c685435cadbcd2bf8f280d074703be76d950f356fd0fcd385f25c7bc11) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
-| `guard:transfer-overdraw` | [0x3874ece506](https://explorer-studio.genlayer.com/tx/0x3874ece506f915bec863448686d9bd1116933e71c6583959288a7b252904bbd6) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `deploy` | [0x48e6029a94](https://explorer-studio.genlayer.com/tx/0x48e6029a946a6b87b33c9e5a90423c8e277d7a6cd303edfc66f1ee91afe4b065) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:brand_nova` | [0x326374cfdb](https://explorer-studio.genlayer.com/tx/0x326374cfdb0fcf852e62395bb16f708601ff7c8c0ff590350d31b13f837c36e6) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:brand_pulse` | [0x3637e03697](https://explorer-studio.genlayer.com/tx/0x3637e03697876d38b320a359e44947839cb7104ef91a68c336ba1848db4d1c35) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:brand_aurora` | [0xd21d2bc2c1](https://explorer-studio.genlayer.com/tx/0xd21d2bc2c15323fc1dcd8d6e89411e01cd95b53047991bdcb83ba0521f488915) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:creator_mira` | [0xe0a003f328](https://explorer-studio.genlayer.com/tx/0xe0a003f328bfda5374775177b36b6ed3e2005278424611b7d6574e9f7e14ac60) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:creator_jonas` | [0x75ec0ac006](https://explorer-studio.genlayer.com/tx/0x75ec0ac00617471318c049c12c03ff4530e96ecd5db29d3a4bbd69c3e3ecd943) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:curator_lin` | [0x9fbee46fab](https://explorer-studio.genlayer.com/tx/0x9fbee46fab4b45d197b7bc91706f0f85b19c9a765f4bfb4a66eb4f32a726c943) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `faucet:curator_ada` | [0xee88fb65db](https://explorer-studio.genlayer.com/tx/0xee88fb65dbc59225eebdf270a491025cc596f2b53eb4f56c0aade87a2c516c3b) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `create:1` | [0x5fdb02075c](https://explorer-studio.genlayer.com/tx/0x5fdb02075c8615a36e3e6113fdacb090a3e3d7200f1f44006650e18a49b11a2a) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `create:2` | [0xa96a8d252b](https://explorer-studio.genlayer.com/tx/0xa96a8d252b4cb80b66c458e591c1d4f81042ab43045a5c0d163e7dcc3c5e2b12) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `create:3` | [0xaf88a9f1bd](https://explorer-studio.genlayer.com/tx/0xaf88a9f1bdb73ea256bb4a35844f24b79f6f8d56b35c517552ff3b621e43070a) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `create:4` | [0xeb729541d7](https://explorer-studio.genlayer.com/tx/0xeb729541d7bc5af99eff734ffe0e279e13f82ea86bec5886e10955426b2f3f14) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `submit:1` | [0x761e6f085d](https://explorer-studio.genlayer.com/tx/0x761e6f085d8bfa83c68a995faf1894d40f01bc2321d81bd6270565da786d8917) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `submit:2` | [0x2cfeafdd60](https://explorer-studio.genlayer.com/tx/0x2cfeafdd60287ec0726a84d0946abcbe6d8bb76baa083291623eaff4bdfb0d0e) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `submit:3` | [0x12a985a35e](https://explorer-studio.genlayer.com/tx/0x12a985a35e9f6908015ddc08eafe2aa7159d91f662035e0aa1dc96bfc593042e) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `submit:4` | [0x04bdb110e0](https://explorer-studio.genlayer.com/tx/0x04bdb110e0cd3e3fc1125c79885c1c0de4a1a89c991cc7b5ad7eaf5074e61040) | FINALIZED | MAJORITY_AGREE | SUCCESS | 4 agree / 0 disagree |
+| `guard:recover-before-window` | [0x0196dbd196](https://explorer-studio.genlayer.com/tx/0x0196dbd196ad5bd88113ae3905a3839e7af2327a22f9f56c588cf55998716fac) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `guard:recover-hard-timeout-early` | [0xb208aafcd8](https://explorer-studio.genlayer.com/tx/0xb208aafcd88d0799e7f2cb9438643acd53136a95031beef6f771eff29429b6aa) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `curate:1` | [0x5140b487ce](https://explorer-studio.genlayer.com/tx/0x5140b487ce73d0b4e7e9f6bb78c26bee329a08924a757a912fc3309ac426748a) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `curate:2` | [0xb8c3f6160d](https://explorer-studio.genlayer.com/tx/0xb8c3f6160db190a71d024151b9180b5b69f318f4da18411e3f75d0ccedf39bf9) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `curate:3` | [0x32f793c59e](https://explorer-studio.genlayer.com/tx/0x32f793c59e6ef774cbaa69f3cdd214d7531180000d38e1875063f7e6edd1393d) | FINALIZED | MAJORITY_AGREE | SUCCESS | 4 agree / 0 disagree |
+| `curate:4` | [0xd7128272ae](https://explorer-studio.genlayer.com/tx/0xd7128272aef68c80b875090061a75256954c1dc8069b44af4a129bee4c8b9144) | FINALIZED | MAJORITY_AGREE | SUCCESS | 4 agree / 0 disagree |
+| `curate:recovery` | [0xb28000cf66](https://explorer-studio.genlayer.com/tx/0xb28000cf66b2a9669af6b3002295fcd8e9a7570abd2b2066d05cb933dc311b2f) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `guard:clawback-submitted` | [0x90f21929e1](https://explorer-studio.genlayer.com/tx/0x90f21929e125169d913d38b7fccbc6bfcfb3625a9b302b318aceff5c52f5ea1b) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 4 agree / 0 disagree |
+| `audit:1` | [0x306c84fa7d](https://explorer-studio.genlayer.com/tx/0x306c84fa7dab1f0a5695362c43bce3cf367dd551213640645650ffb7e50b4071) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 1 disagree |
+| `audit:2` | [0x2d2a0b31ac](https://explorer-studio.genlayer.com/tx/0x2d2a0b31ac308c3c18a8ad4f144241a1d493465091fb1bdee3d27795b9575068) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `audit:3` | [0x7d36ba26d3](https://explorer-studio.genlayer.com/tx/0x7d36ba26d36468e212d33058d5d6ab8d96c5c1cea30fce5aa324aef0c4039cd6) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `guard:clawback-evaluated` | [0x1681d33925](https://explorer-studio.genlayer.com/tx/0x1681d33925b401056ab341c54b7dce4aa5b5b90a9bc4949d0693d07dcd51d379) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `settle:1` | [0x3a3356d6ed](https://explorer-studio.genlayer.com/tx/0x3a3356d6ed649de420b9aa096f158a5db46990e0190ecff6c5e7a609e5b78c0e) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `settle:3` | [0x3ef791549e](https://explorer-studio.genlayer.com/tx/0x3ef791549ee85eed6d1403157277ae19769291ecf088d422911d90b895d7189f) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `refund:curation-1` | [0x913322750f](https://explorer-studio.genlayer.com/tx/0x913322750f6780102e27a4092f80eccd39a5c3c2672ebfa2e0746eb11e45f8dd) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `guard:curate-after-settlement` | [0x2e881f8589](https://explorer-studio.genlayer.com/tx/0x2e881f8589420adfd7d30b26d9b164e9cbc553593182fd44a2da9abc8a895c39) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `guard:transfer-overdraw` | [0xa19ea7a585](https://explorer-studio.genlayer.com/tx/0xa19ea7a585c194dda5e9a417e6d6a0c9da5351fbd8e10a31cff99c2aa09ba68d) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `recover:4` | [0x75930721a3](https://explorer-studio.genlayer.com/tx/0x75930721a3307981dcfbabc185cc86f09b1405e6e4489d93044cac2ec50043a7) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
+| `guard:audit-after-recovery` | [0xb29ea19976](https://explorer-studio.genlayer.com/tx/0xb29ea1997665908c9d129e17a7bf26ffbd23ae2c90f74f8605c1293ff109fe63) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `guard:curate-after-recovery` | [0x7ffdb4e8b0](https://explorer-studio.genlayer.com/tx/0x7ffdb4e8b05f21c6ba50b8350657110759acbd1142affeec4c84a75a99a544ac) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 3 agree / 0 disagree |
+| `guard:withdraw-after-recovery` | [0x86a4a556d5](https://explorer-studio.genlayer.com/tx/0x86a4a556d5e59003982997f7a3413b750210e62a735da0458aedcad86ad4c316) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 4 agree / 0 disagree |
+| `guard:recover-twice` | [0x7bc1786d78](https://explorer-studio.genlayer.com/tx/0x7bc1786d78f5a066cc8d4fe5c9d02b2959e1743cc62ec9af03601c3e2710a21e) | FINALIZED | MAJORITY_AGREE | FINISHED_WITH_ERROR | 5 agree / 0 disagree |
+| `refund:recovery-curator` | [0x971babf170](https://explorer-studio.genlayer.com/tx/0x971babf1705a1961f8b74337e2bd8c438240fede7dea54b9666b460c104b3b4b) | FINALIZED | MAJORITY_AGREE | SUCCESS | 3 agree / 0 disagree |
 
 ### Final campaign state
 
 | Id | Campaign | Band | Anchor | Creator CPT | Brand CPT | State |
 | --- | --- | --- | --- | --- | --- | --- |
+| 4 | Recovery dead evidence probe | `` | 0 | 0 | 0 | RECOVERED |
 | 3 | AuroraLab night serum drop | `BOT_FRAUD_OR_MISSING_DISCLOSURE_SLASH` | 0 | 0 | 1650 | SETTLED |
 | 2 | PulseFuel morning stack | `TARGET_MET_TIER` | 80 | 1000 | 400 | EVALUATED |
 | 1 | NovaGlow winter ritual launch | `VIRAL_BONUS_TIER` | 100 | 2120 | 0 | SETTLED |
@@ -357,21 +403,25 @@ re-check lives in [`evidence/explorer_verification.json`](evidence/explorer_veri
   monetary value and this contract is a studionet deployment.
 - Curation is one wallet one stake: a brand can still use a second wallet to stake on its own campaign.
   The curated feed is a discovery signal, it never changes a payout.
-- Audit liveness depends on the validator set agreeing on the external fetch. Every audit is permissionless
-  and retryable, and there is deliberately no timeout refund, because a timeout refund would let a brand
-  escape an audit it is about to lose.
-- OPEN, permanent dead evidence: if a submitted proof page becomes permanently unreadable, the audit
-  reverts fail closed and the campaign stays `SUBMITTED` with its escrow locked. No timed escape exists in
-  that state, because the PAPITO red line forbids the brand from reclaiming while a deliverable awaits
-  audit. The partial mitigation is that `content_proof_url` must be an absolute public `https` host, the
-  audit is open to any caller, and the creator keeps the strongest incentive to keep the page alive since
-  the payout depends on it. A future version could add a consensus decided "dead evidence" band that
-  returns the bond to the creator and the escrow to the brand without paying any bonus, which a brand
-  could not use to escape a readable page.
+- Audit liveness depends on the validator set agreeing on the external fetch. Every audit is
+  permissionless and retryable. There is no discretionary timeout refund a brand could use to escape
+  an audit it is about to lose; the escape hatches are strictly neutral.
+- Dead evidence is now handled, not stranded. If a submitted proof page becomes permanently
+  unreadable, `recover_unreachable_deliverable` lets validators agree on one boolean and run a neutral
+  recovery after the minimum window, and `recover_hard_timeout` is a longer backstop for when
+  validators cannot agree on the fetch at all. Both return the bond to the creator, the vault to the
+  brand and every stake to its curator, pay no bonus and slash nothing. The remaining trust
+  assumption is honest validator behaviour on the fetch: recovery only succeeds when a majority
+  genuinely agrees the page is unreachable, and a readable page always reverts the recovery so the
+  audit stays the only path to a payout.
+- The unreachable floor is a security parameter, not the main guarantee. Because the audit is
+  permissionless from the moment of submission, the real anti escape protection is that path a
+  requires unanimous agreement that the page cannot be read. The floor (a few minutes here) only
+  stops a recovery from racing a brand new submission or a flaky fetch.
 - `check_vault_invariants` and `_resync_top_curated` scan campaigns linearly. That is fine at the campaign
   counts used here. A high volume deployment would maintain running totals in storage instead.
-- Direct tests exercise the leader path only. Validator agreement is proven by the three live studionet
-  audits recorded in `docs/evidence.md`, not by pytest.
+- Direct tests exercise the leader path only. Validator agreement is proven by the live studionet
+  audits and the live neutral recovery recorded in `docs/evidence.md`, not by pytest.
 - The proof page is creator-authored, so reach and engagement numbers are self-reported. Prompt injection
   is mitigated by sanitization, by the deterministic disclosure gate and by independent validator re-runs,
   but it is not claimed to be impossible. A production extension would replace the self-reported metrics
@@ -388,10 +438,19 @@ re-check lives in [`evidence/explorer_verification.json`](evidence/explorer_veri
 ![Consensus and prompt inspector](docs/screenshot-inspector.png)
 
 - Creator economy studio aesthetic on midnight `#0B0716` with magenta, violet and emerald rings.
-- Interactive What-If payout and viral bonus simulator with live band, split bars and conservation.
+- Operator console with real forms for create campaign, deliverable submission, curation, transfer and
+  the capped faucet, each validated client side against the contract floors and ceilings and each sent
+  as a real transaction, with the tx hash linked to the explorer and the status polled to `FINALIZED`.
+- Per campaign actions: accept and submit with a real proof URL, verify (the consensus audit), claim
+  settlement (only enabled once the audit has run and the dispute window has closed, and the UI says
+  so), claim curation refund (after settlement or recovery), withdraw liquidity, and the two neutral
+  recovery buttons.
+- Interactive What-If payout and viral bonus simulator, clearly labelled illustration only.
 - Consensus and prompt inspector drawer: exact prompt, equivalence principle, snapshot, verdict.
 - Security Guard Lab: one click real transaction probes plus a deterministic slash probe.
 - Dual wallet: a 1-click browser burner with a locally generated key, or MetaMask.
+- A proofs note explaining that validators fetch the proof URL and that the creator can host the proof
+  page under `frontend/public/proofs` or any public https host.
 - Web Audio synthesizer: ambient pad, chord swells and UI cues, generated at runtime.
 - One `get_dashboard` call on first paint to stay well under studionet rate limits, and no local ABI
   override is ever passed to `readContract`.
