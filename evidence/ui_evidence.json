@@ -1,0 +1,45 @@
+{
+  "steps": [
+    {
+      "step": "faucet brand",
+      "detail": "0xae1dc1c4c68979430db5b0d59b2ac4ac0a46ef83e0df1499e2f5012663097dc6",
+      "at": 1792691142
+    },
+    {
+      "step": "create campaign",
+      "detail": "0x7639327ac867d68c660a6496355361b0b7f92506aa511026d382fa499611c746",
+      "at": 1792691184
+    },
+    {
+      "step": "screenshot",
+      "detail": "console-create",
+      "at": 1792691185
+    },
+    {
+      "step": "submit deliverable",
+      "detail": "0xd9b4c76dfe5b21a2719f770352464141bbe49c4ed7f8849c506f5a789daae9e4",
+      "at": 1792691269
+    },
+    {
+      "step": "screenshot",
+      "detail": "submit-finalized",
+      "at": 1792691270
+    },
+    {
+      "step": "curate",
+      "detail": "0x49438bec279267cb2b95493139e01f93cd43e160ae8ec2d8e258c771cec9e5ed",
+      "at": 1792691355
+    },
+    {
+      "step": "verify clicked, awaiting consensus",
+      "detail": "",
+      "at": 1792691362
+    }
+  ],
+  "screenshots": [
+    "artifacts\\shots\\ui-console-create.png",
+    "artifacts\\shots\\ui-submit-finalized.png"
+  ],
+  "base_url": "http://127.0.0.1:4181/creator-pulse/",
+  "error": "timeout: Locator.wait_for: Timeout 900000ms exceeded.\nCall log:\n  - waiting for get_by_text(\"Verify deliverable finalized\").first to be visible\n"
+}

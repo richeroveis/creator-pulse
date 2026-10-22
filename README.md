@@ -431,9 +431,11 @@ re-check lives in [`evidence/explorer_verification.json`](evidence/explorer_veri
 
 ![CreatorPulse hero](docs/screenshot-home.png)
 
-![Live campaign board read from studionet](docs/screenshot-campaigns.png)
+![Operator console with real inputs and real transactions](docs/screenshot-console.png)
 
-![What if payout simulator verified against the deployed helper](docs/screenshot-simulator.png)
+![Live campaign board read from studionet, including a RECOVERED campaign](docs/screenshot-campaigns.png)
+
+![What if payout simulator, labelled illustration only](docs/screenshot-simulator.png)
 
 ![Consensus and prompt inspector](docs/screenshot-inspector.png)
 
@@ -459,22 +461,35 @@ re-check lives in [`evidence/explorer_verification.json`](evidence/explorer_veri
 
 ## Demo video
 
-`docs/demo-video-subtitled.mp4` is a 48 second 1280x720 walkthrough with a synthesized ambient
-soundtrack (AAC, verified with `ffprobe`) and burned-in English subtitles. Regenerate it with:
+`docs/demo-video-subtitled.mp4` is the 48 second subtitled walkthrough carried over from the v1
+deployment. It predates the v2 recovery UI, so it does not show the new console or the neutral
+recovery flow. The current interface, the real inputs and the recovery state are shown in the live app
+and in the screenshots above rather than in this older video.
+
+The video renderer `tools/make_demo_video.py` requires a `libx264` and `aac` capable ffmpeg plus the
+DejaVu fonts. Those were not available in this working environment, so the video was intentionally
+left unchanged instead of being claimed as regenerated. It can be rebuilt on a machine with a full
+ffmpeg by running:
 
 ```bash
 .venv/bin/python tools/generate_soundtrack.py
 .venv/bin/python tools/make_demo_video.py
 ```
 
-The finished video is tracked on `main` and mirrored into `frontend/public`, so reviewers can open it
-from either place without building anything:
+The finished video stays tracked on `main` and mirrored into `frontend/public`:
 
 - Repository copy: https://github.com/richeroveis/creator-pulse/raw/main/docs/demo-video-subtitled.mp4
 - Live copy: https://richeroveis.github.io/creator-pulse/demo-video-subtitled.mp4
 
-Both files are byte identical, sha256 `e345cd94c26b2c8c2b39624cd99b8f63ddc425e52459e5b2ed580994ba5dbb50`,
-1,463,529 bytes. Intermediate renders (`*.webm`, `*.wav`, scratch `*.mp4`) stay gitignored.
+## Browser driven UI evidence
+
+`tools/drive_ui_evidence.py` launches a real Chromium, connects burner wallets in separate contexts,
+and drives the deployed contract through the actual forms. On this run the create (custom inputs),
+accept and submit (custom proof URL), and curate actions each reached `FINALIZED` on studionet, and
+the consensus verify was dispatched from the Verify button. The submit, settlement and recovery
+consensus steps are additionally proven by the scripted, explorer verified deployment above, because a
+browser side audit did not clear the 15 minute poll ceiling during this session. The captured
+transaction hashes are re-checked against the explorer JSON API in `evidence/ui_evidence.json`.
 
 ---
 
