@@ -29,10 +29,6 @@ import {
 import { validateProofUrl } from "../lib/validation";
 import { sound } from "../lib/sound";
 
-// Mirror of the contract recovery windows, shown only to explain the buttons.
-const RECOVER_UNREACHABLE_MIN_SECONDS = 60 * 60;
-const RECOVER_TIMEOUT_MIN_SECONDS = 60 * 60 * 24 * 7;
-
 type Feedback = { kind: "idle" | "ok" | "err"; text: string; hash?: string };
 
 function useNowSeconds(): number {
@@ -82,6 +78,10 @@ function CampaignCard({
   } = api;
   const [stake, setStake] = useState(25);
   const defaultProof = `https://richeroveis.github.io/creator-pulse/proofs/campaign-${Math.min(campaign.campaign_id, 3)}.html`;
+  // Recovery floors are read from get_config so the buttons never drift from the
+  // deployed contract. Fallbacks match the current contract constants.
+  const unreachableFloor = api.config?.recover_unreachable_min_seconds ?? 300;
+  const timeoutFloor = api.config?.recover_timeout_min_seconds ?? 60 * 60 * 24 * 7;
   const [proofUrl, setProofUrl] = useState(defaultProof);
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle", text: "" });
   const now = useNowSeconds();
@@ -215,8 +215,8 @@ function CampaignCard({
         const canClaim = campaign.evaluated && !campaign.settled && disputeClosed;
         const canRefund = campaign.settled || campaign.state === "RECOVERED";
         const elapsed = campaign.submitted_clock ? now - campaign.submitted_clock : 0;
-        const unreachableReady = campaign.state === "SUBMITTED" && elapsed >= RECOVER_UNREACHABLE_MIN_SECONDS;
-        const timeoutReady = campaign.state === "SUBMITTED" && elapsed >= RECOVER_TIMEOUT_MIN_SECONDS;
+        const unreachableReady = campaign.state === "SUBMITTED" && elapsed >= unreachableFloor;
+        const timeoutReady = campaign.state === "SUBMITTED" && elapsed >= timeoutFloor;
         const curatable =
           (campaign.state === "SUBMITTED" || campaign.state === "EVALUATED") &&
           !campaign.settled;
@@ -307,7 +307,7 @@ function CampaignCard({
                     disabled={busy !== null || !unreachableReady || !wallet}
                     onClick={() => runAction("Recover unreachable", () => recoverUnreachable(campaign.campaign_id))}
                     className="btn-ghost px-3 py-2 text-[12px] disabled:opacity-40"
-                    title={unreachableReady ? "Neutral recovery if validators agree the page is dead" : "Unreachable recovery opens 1 hour after submission"}
+                    title={unreachableReady ? "Neutral recovery if validators agree the page is dead" : `Unreachable recovery opens ${Math.round(unreachableFloor / 60)} minutes after submission`}
                   >
                     <LifeBuoy size={14} /> Recover unreachable
                   </button>
@@ -316,7 +316,7 @@ function CampaignCard({
                     disabled={busy !== null || !timeoutReady || !wallet}
                     onClick={() => runAction("Recover hard timeout", () => recoverHardTimeout(campaign.campaign_id))}
                     className="btn-ghost px-3 py-2 text-[12px] disabled:opacity-40"
-                    title={timeoutReady ? "Neutral recovery after the 7 day hard timeout" : "Hard timeout recovery opens 7 days after submission"}
+                    title={timeoutReady ? "Neutral recovery after the hard timeout" : `Hard timeout recovery opens ${Math.round(timeoutFloor / 3600)} hours after submission`}
                   >
                     <RefreshCcw size={14} /> Recover hard timeout
                   </button>

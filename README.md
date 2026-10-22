@@ -232,16 +232,23 @@ scripts/verify_identity.py          4-way sha256, address, provenance and explor
 scripts/write_evidence_md.py        render docs/evidence.md from the evidence JSON
 scripts/ci_seed_genvm.py            pin the direct test runner tarball used by CI
 scripts/check_frontend_bindings.py  fail if a contract write method has no frontend binding
+scripts/test_retry_race.ts          proves the transaction layer never resubmits after a client error
+scripts/verify_ui_flow.py           re-read every browser signed hash through the explorer API
+tools/drive_ui_flow.py              drive the real UI with Playwright burner wallets and webm capture
+tools/drive_verify_claim.py         lean UI pass that clicks Verify then Claim settlement
+tools/build_demo_video.py           stitch the webm recordings into a libx264 mp4
+tools/read_ui_flow_final.py         independent contract reads confirming the UI outcomes
 tools/make_logo.py                  procedural 512x512 logo generator
 tools/generate_soundtrack.py        synthesized demo soundtrack
-tools/make_demo_video.py            subtitled audio backed demo video renderer
+tools/make_demo_video.py            legacy PIL rendered video (superseded by build_demo_video.py)
 tools/capture_screenshots.py        screenshot the live deployed page
 frontend/                           React, TypeScript, Vite, Tailwind, genlayer-js
 frontend/public/proofs/             static proof pages fetched by validators
 evidence/studionet_deployment.json  deploy address, tx table, state and hashes
 evidence/explorer_verification.json explorer re-check of every recorded transaction
+evidence/ui_flow_verification.json  every browser signed tx, its explorer report and contract reads
 docs/                               logo, screenshots, evidence notes, demo video (tracked)
-.github/workflows/ci.yml            lint, direct tests, identity and frontend build
+.github/workflows/ci.yml            lint, direct tests, identity, bindings, frontend build, retry guard
 ```
 
 ---
@@ -439,10 +446,23 @@ re-check lives in [`evidence/explorer_verification.json`](evidence/explorer_veri
 
 ![Consensus and prompt inspector](docs/screenshot-inspector.png)
 
+![Create campaign form filled with custom inputs from a real browser session](docs/screenshot-create-campaign.png)
+
+![Verify (consensus audit) reached FINALIZED, settlement unlocked](docs/screenshot-verify.png)
+
+![Settlement claimed from the UI and reflected in the campaign state](docs/screenshot-settled.png)
+
+![Settlement is gated: no claim is possible before the audit runs](docs/screenshot-claim-disabled.png)
+
 - Creator economy studio aesthetic on midnight `#0B0716` with magenta, violet and emerald rings.
 - Operator console with real forms for create campaign, deliverable submission, curation, transfer and
   the capped faucet, each validated client side against the contract floors and ceilings and each sent
   as a real transaction, with the tx hash linked to the explorer and the status polled to `FINALIZED`.
+- The transaction layer never resubmits a write after a client side error. A submission is keyed by a
+  fingerprint of sender plus function plus arguments; if the receipt poll fails, times out, or the page
+  reloads, the known hash is watched again (or resumed from `localStorage`, which stores only the hash
+  and campaign id, never any key) instead of sending a second transaction. A failure before any hash is
+  known raises an unambiguous error and re-reads contract state rather than blindly retrying.
 - Per campaign actions: accept and submit with a real proof URL, verify (the consensus audit), claim
   settlement (only enabled once the audit has run and the dispute window has closed, and the UI says
   so), claim curation refund (after settlement or recovery), withdraw liquidity, and the two neutral
@@ -450,46 +470,67 @@ re-check lives in [`evidence/explorer_verification.json`](evidence/explorer_veri
 - Interactive What-If payout and viral bonus simulator, clearly labelled illustration only.
 - Consensus and prompt inspector drawer: exact prompt, equivalence principle, snapshot, verdict.
 - Security Guard Lab: one click real transaction probes plus a deterministic slash probe.
-- Dual wallet: a 1-click browser burner with a locally generated key, or MetaMask.
+- Dual wallet: a 1-click browser burner with a locally generated key, or MetaMask. The burner path is the
+  one exercised by the headless browser runs below; MetaMask mode is not tested in headless runs and is
+  therefore described as untested rather than verified.
+- Receipt waiting is robust for slow audits: it polls one already submitted hash for up to 60 minutes
+  with backoff, prints elapsed time and the hash with an explorer link while it waits, and a page reload
+  resumes watching a pending hash. The recovery window buttons read their floor from `get_config`, so
+  they can never drift from the deployed contract.
 - A proofs note explaining that validators fetch the proof URL and that the creator can host the proof
   page under `frontend/public/proofs` or any public https host.
 - Web Audio synthesizer: ambient pad, chord swells and UI cues, generated at runtime.
-- One `get_dashboard` call on first paint to stay well under studionet rate limits, and no local ABI
-  override is ever passed to `readContract`.
+- One `get_dashboard` call plus one `get_config` call on first paint (a handful of reads, kept low to
+  respect the studionet 500 requests per hour limit), one status lookup per poll cycle while a write is
+  in flight, and no local ABI override is ever passed to `readContract`.
 
 ---
 
 ## Demo video
 
-`docs/demo-video-subtitled.mp4` is the 48 second subtitled walkthrough carried over from the v1
-deployment. It predates the v2 recovery UI, so it does not show the new console or the neutral
-recovery flow. The current interface, the real inputs and the recovery state are shown in the live app
-and in the screenshots above rather than in this older video.
-
-The video renderer `tools/make_demo_video.py` requires a `libx264` and `aac` capable ffmpeg plus the
-DejaVu fonts. Those were not available in this working environment, so the video was intentionally
-left unchanged instead of being claimed as regenerated. It can be rebuilt on a machine with a full
-ffmpeg by running:
+`docs/demo-video-subtitled.mp4` is a real screen recording of the browser driven studionet flow
+below, stitched from the per session Playwright webm captures and encoded to h264 with the libx264
+encoder bundled in `imageio-ffmpeg` (no system ffmpeg needed). It is 3 minutes 42 seconds at 1280x720,
+fast forwarded through the long consensus waits, and it visibly shows the create form with custom
+inputs, the deliverable submission with a real proof URL, curation, the Verify (consensus audit) click,
+the claim settlement click, and the second campaign whose unreachable proof goes through the neutral
+recovery. Rebuild it after a fresh browser run with:
 
 ```bash
-.venv/bin/python tools/generate_soundtrack.py
-.venv/bin/python tools/make_demo_video.py
+.venv/bin/python tools/drive_ui_flow.py            # records webm into artifacts/video
+.venv/bin/python tools/build_demo_video.py         # stitches and encodes the mp4
 ```
 
-The finished video stays tracked on `main` and mirrored into `frontend/public`:
+Video sha256 `4afdd271cef6e8c2f0d1f816a3445b1980d65ddfaa91f3ef2ae9407455a9c2a8`. The finished video is
+tracked on `main` and mirrored into `frontend/public`:
 
 - Repository copy: https://github.com/richeroveis/creator-pulse/raw/main/docs/demo-video-subtitled.mp4
 - Live copy: https://richeroveis.github.io/creator-pulse/demo-video-subtitled.mp4
 
 ## Browser driven UI evidence
 
-`tools/drive_ui_evidence.py` launches a real Chromium, connects burner wallets in separate contexts,
-and drives the deployed contract through the actual forms. On this run the create (custom inputs),
-accept and submit (custom proof URL), and curate actions each reached `FINALIZED` on studionet, and
-the consensus verify was dispatched from the Verify button. The submit, settlement and recovery
-consensus steps are additionally proven by the scripted, explorer verified deployment above, because a
-browser side audit did not clear the 15 minute poll ceiling during this session. The captured
-transaction hashes are re-checked against the explorer JSON API in `evidence/ui_evidence.json`.
+`tools/drive_ui_flow.py` and `tools/drive_verify_claim.py` launch a real Chromium, connect burner
+wallets in separate browser contexts, and drive the deployed contract purely through the forms, while
+`scripts/verify_ui_flow.py` re-reads every browser signed hash through the explorer JSON API. The
+result, recorded in `evidence/ui_flow_verification.json`, is 16 of 16 rows `FINALIZED` with validator
+majority and no appeal:
+
+- Settlement path from the browser: create campaign (custom inputs), accept and submit a real public
+  proof URL, curate, click Verify (`verify_campaign_deliverable_live`) to FINALIZED, wait out the 90
+  second dispute window, then click Claim settlement. An independent contract read confirms the campaign
+  reached `SETTLED` and the vault invariant still holds with zero drift.
+- Recovery path from the browser: a second campaign submitted a genuinely unreachable proof page, then
+  the evidence unreachable recovery was triggered from the UI after its window, reaching `RECOVERED`, and
+  the curator pulled the stake back with Claim curation refund. A contract read confirms the recovered
+  state, the refund and a drift of zero.
+- Settlement gating: on a SUBMITTED campaign that has not been audited, Claim settlement is not available
+  and the board shows the reason, captured in `docs/screenshot-claim-disabled.png`.
+
+Honest scope: the studionet public RPC enforces 500 requests per hour, which repeatedly stopped a single
+continuous multi actor pass, so the settlement path and the recovery path were each completed across more
+than one browser session. Every listed step is still a real browser signed transaction that the explorer
+confirms `FINALIZED`, not a scripted call. MetaMask mode is not exercised in these headless runs and is
+documented as untested rather than verified.
 
 ---
 

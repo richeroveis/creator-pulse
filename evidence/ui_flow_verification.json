@@ -1,0 +1,198 @@
+{
+  "generated_at": "2026-10-22T22:08:03Z",
+  "network": {
+    "name": "studionet",
+    "chain_id": 61999
+  },
+  "contract_address": "0x6768EAdcFBF13aDEE460Bfd228f6653f3e013016",
+  "base_url": "http://127.0.0.1:4181/creator-pulse/",
+  "transactions": [
+    {
+      "step": "faucet:brand",
+      "role": "brand",
+      "path": "faucet",
+      "function": "faucet_or_deposit",
+      "tx": "0x3d9a6deadc21f54c2075f4c95724359632990ed612173cf428096550ddd579cf",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "capped burner credit"
+    },
+    {
+      "step": "create:a",
+      "role": "brand",
+      "path": "create",
+      "function": "create_campaign",
+      "tx": "0xda19b8cf00aa62779ee7a77500a6573f2c32a827a79c7f83d1f7825b3ac21c58",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "custom inputs, base 300 viral 100 bond 50"
+    },
+    {
+      "step": "faucet:brand_b",
+      "role": "brand_b",
+      "path": "faucet",
+      "function": "faucet_or_deposit",
+      "tx": "0x56b7c1ad5dc14355265f43b47a9cc27f2d0dd369722e4d37dd7704104041e0da",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "capped burner credit"
+    },
+    {
+      "step": "create:b",
+      "role": "brand_b",
+      "path": "create",
+      "function": "create_campaign",
+      "tx": "0x4fd0eae375249c35f178ccaeecfbf596e631ed9ccc17ad8d4d635f5912bbf6f3",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "custom inputs, base 200 viral 100 bond 50"
+    },
+    {
+      "step": "faucet:creator_b",
+      "role": "creator_b",
+      "path": "faucet",
+      "function": "faucet_or_deposit",
+      "tx": "0xe20d175d39a9df2652b7e4a3fa5d3010e1e06f7b8aa303097f941489bc57490b",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "capped burner credit"
+    },
+    {
+      "step": "submit:b",
+      "role": "creator_b",
+      "path": "submit",
+      "function": "accept_and_submit_deliverable",
+      "tx": "0x9bc57d7a938eee7af74576ffdc9ad3cd8dd120096d8824d9a8f2d1a77f5cec8a",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "custom proof URL, bond locked"
+    },
+    {
+      "step": "faucet:curator_b",
+      "role": "curator_b",
+      "path": "faucet",
+      "function": "faucet_or_deposit",
+      "tx": "0xcafdcba19fe69dd10dcf0eeefbeb2f4c95ad6be549b036f2a7af0f550fbb40f9",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "capped burner credit"
+    },
+    {
+      "step": "curate:b",
+      "role": "curator_b",
+      "path": "curate",
+      "function": "curate_deliverable",
+      "tx": "0x491ee094d1d6145c144f2cfd59b55c7669d7738bdb7149a0ef5650ae5db83183",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "30 CPT staked"
+    },
+    {
+      "step": "recover:b",
+      "role": "keeper",
+      "path": "recover",
+      "function": "recover_unreachable_deliverable",
+      "tx": "0x1b63c7c0e8969ce2d5765d7747b3120003cb35741dd4a9fad82d6c54362737bb",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "validators agreed proof unreachable, neutral recovery"
+    },
+    {
+      "step": "refund:recovered",
+      "role": "curator_b",
+      "path": "refund",
+      "function": "claim_curation_refund",
+      "tx": "0x95fb2f9a673283e6dd5df84a52425a8a7b45d83d719784191b5867688c81c38c",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "curator pulls stake after recovery"
+    },
+    {
+      "step": "faucet:creator",
+      "role": "creator",
+      "path": "faucet",
+      "function": "faucet_or_deposit",
+      "tx": "0x77de10f844e245cfecedfb12e28282a0047cfdd895e62de988cde3982a354cec",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "capped burner credit"
+    },
+    {
+      "step": "submit:a",
+      "role": "creator",
+      "path": "submit",
+      "function": "accept_and_submit_deliverable",
+      "tx": "0x1de58cd34981ff02ad5a14bcd62dcbcaa55295a363494362c1e19f3ddcfde33b",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "custom proof URL, bond locked"
+    },
+    {
+      "step": "faucet:curator",
+      "role": "curator",
+      "path": "faucet",
+      "function": "faucet_or_deposit",
+      "tx": "0xb8717d76bce1f5db8aabcffe296121b5a6ddcce7cc4296fa7dd313cdc75cfd4b",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "capped burner credit"
+    },
+    {
+      "step": "curate:a",
+      "role": "curator",
+      "path": "curate",
+      "function": "curate_deliverable",
+      "tx": "0x839f724b4abdcf23cb22c0664c772518f8fe407c9f0788ed96f2f07e4d9ef208",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "25 CPT staked"
+    },
+    {
+      "step": "verify:a",
+      "role": "keeper",
+      "path": "verify",
+      "function": "verify_campaign_deliverable_live",
+      "tx": "0xcbb2ddb8b78b42af35d97a3727a8c0d1b7bcb9e44289389cbeddddd3743cc3ff",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "live consensus audit from the UI"
+    },
+    {
+      "step": "claim:settled",
+      "role": "keeper",
+      "path": "claim",
+      "function": "claim_campaign_settlement",
+      "tx": "0xe2b2144b24021abc5ce30ec8fa2930254bdebef3f7c28ac2eed70637f2e211c9",
+      "expected": "SUCCESS",
+      "execution": "SUCCESS",
+      "note": "creator + brand paid out from the UI"
+    }
+  ],
+  "statuses": {
+    "path_a": "error: path a skipped"
+  },
+  "final": {
+    "campaign_10_settled": {
+      "state": "SETTLED",
+      "band": "BOT_FRAUD_OR_MISSING_DISCLOSURE_SLASH",
+      "creator_payout_cpt": 0,
+      "brand_refund_cpt": 450
+    },
+    "campaign_9_recovered": {
+      "state": "RECOVERED",
+      "recovered": true,
+      "curator_refunded_cpt": 30
+    },
+    "invariants": {
+      "campaign_count": 10,
+      "campaign_escrow_atto": 3000000000000000000000,
+      "curation_escrow_atto": 285000000000000000000,
+      "drift_atto": 0,
+      "expected_vault_atto": 3285000000000000000000,
+      "ok": true,
+      "vault_custody_balance_atto": 3285000000000000000000
+    }
+  },
+  "videos": [],
+  "screenshots": []
+}

@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:retry": "esbuild ../scripts/test_retry_race.ts --bundle --platform=node --format=esm --outfile=../artifacts/retry_race_test.mjs && node ../artifacts/retry_race_test.mjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.3",
